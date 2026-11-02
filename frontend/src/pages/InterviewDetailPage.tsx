@@ -58,6 +58,8 @@ export function InterviewDetailPage() {
 
   const [notes, setNotes] = useState('')
   const [notesDirty, setNotesDirty] = useState(false)
+  const [summary, setSummary] = useState('')
+  const [summaryDirty, setSummaryDirty] = useState(false)
   const [consentOpen, setConsentOpen] = useState(false)
   const [captureOpen, setCaptureOpen] = useState(false)
   const [followUp, setFollowUp] = useState('')
@@ -93,6 +95,10 @@ export function InterviewDetailPage() {
     }
   }, [data, notesDirty])
 
+  useEffect(() => {
+    if (data && !summaryDirty) setSummary(data.summary)
+  }, [data, summaryDirty])
+
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['interview', interviewId] })
     void queryClient.invalidateQueries({ queryKey: ['interviews'] })
@@ -121,6 +127,20 @@ export function InterviewDetailPage() {
       toast.push({ title: 'Notes saved', variant: 'success' })
     },
     onError: (error) => toast.push({ title: 'Could not save notes', message: (error as Error).message, variant: 'error' }),
+  })
+
+  const saveSummary = useMutation({
+    mutationFn: () => api.patch(`/interviews/${interviewId}`, { summary }),
+    onSuccess: () => {
+      setSummaryDirty(false)
+      invalidate()
+      toast.push({
+        title: 'Summary saved',
+        message: 'This is the researcher account of the conversation, not customer evidence.',
+        variant: 'success',
+      })
+    },
+    onError: (error) => toast.push({ title: 'Could not save summary', message: (error as Error).message, variant: 'error' }),
   })
 
   const recordConsent = useMutation({
@@ -308,6 +328,32 @@ export function InterviewDetailPage() {
                 it; otherwise leave the cause open.
               </Notice>
             </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Conversation summary"
+            subtitle="The researcher's account of what happened. Kept separate from customer evidence."
+            actions={
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm"
+                onClick={() => saveSummary.mutate()}
+                disabled={!summaryDirty || saveSummary.isPending}
+              >
+                <Save size={13} /> {saveSummary.isPending ? 'Saving…' : summaryDirty ? 'Save summary' : 'Saved'}
+              </button>
+            }
+          >
+            <textarea
+              className="form-control"
+              rows={4}
+              value={summary}
+              placeholder="Summarise the conversation in your own words. Do not put quotes here — capture those as evidence."
+              onChange={(event) => {
+                setSummary(event.target.value)
+                setSummaryDirty(true)
+              }}
+            />
           </SectionCard>
 
           <SectionCard
