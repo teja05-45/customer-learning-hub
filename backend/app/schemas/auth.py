@@ -1,6 +1,18 @@
 """Authentication contracts."""
 
+from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
+
+Role = Literal["admin", "ceo", "business_owner", "researcher", "cx"]
+
+
+def normalise_email(value: str) -> str:
+    value = value.strip().lower()
+    if "@" not in value or value.startswith("@") or value.endswith("@"):
+        raise ValueError("Enter a valid email address.")
+    return value
 
 
 class DemoLoginRequest(BaseModel):
@@ -28,10 +40,7 @@ class RegisterRequest(BaseModel):
     @field_validator("email")
     @classmethod
     def _normalise_email(cls, value: str) -> str:
-        value = value.strip().lower()
-        if "@" not in value or value.startswith("@") or value.endswith("@"):
-            raise ValueError("Enter a valid email address.")
-        return value
+        return normalise_email(value)
 
 
 class PasswordChangeRequest(BaseModel):
@@ -50,3 +59,40 @@ class AuthUser(BaseModel):
 
 class AuthMessage(BaseModel):
     message: str
+
+
+class MemberCreate(BaseModel):
+    """An administrator creating an account for a colleague."""
+
+    name: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=3, max_length=160)
+    role: Role
+    job_title: str = Field(default="", max_length=120)
+    password: str = Field(min_length=10, max_length=200)
+
+    @field_validator("email")
+    @classmethod
+    def _normalise_email(cls, value: str) -> str:
+        return normalise_email(value)
+
+
+class MemberUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    role: Role | None = None
+    job_title: str | None = Field(default=None, max_length=120)
+    is_active: bool | None = None
+
+
+class AdminPasswordReset(BaseModel):
+    new_password: str = Field(min_length=10, max_length=200)
+
+
+class MemberOut(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    job_title: str
+    initials: str
+    is_active: bool
+    created_at: datetime

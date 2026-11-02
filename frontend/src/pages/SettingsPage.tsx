@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Database, Download, ShieldAlert, Trash2, Users } from 'lucide-react'
+import { Database, Download, KeyRound, ShieldAlert, Trash2, UserPlus, Users } from 'lucide-react'
 import { api } from '../services/api'
 import { useToast } from '../app/ToastProvider'
 import { useSession } from '../app/SessionProvider'
-import type { Health, OrgSettings } from '../types'
+import type { Health, Member, OrgSettings, UserRole } from '../types'
 import {
   ErrorState,
   LoadingBlock,
@@ -27,10 +27,13 @@ const EXPORTS = [
   { entity: 'actions', label: 'Actions' },
 ]
 
+const ROLE_OPTIONS: UserRole[] = ['admin', 'researcher', 'business_owner', 'ceo', 'cx']
+
 export function SettingsPage() {
   const toast = useToast()
   const queryClient = useQueryClient()
   const { user, users } = useSession()
+  const isAdmin = user?.role === 'admin'
   const [resetOpen, setResetOpen] = useState(false)
   const [form, setForm] = useState({ name: '', retention_months: 12, show_demo_banner: true })
 
@@ -76,6 +79,78 @@ export function SettingsPage() {
       })
     },
     onError: (error) => toast.push({ title: 'Reset failed', message: (error as Error).message, variant: 'error' }),
+  })
+
+  const [memberForm, setMemberForm] = useState({
+    name: '',
+    email: '',
+    role: 'researcher' as UserRole,
+    job_title: '',
+    password: '',
+  })
+  const [resetTarget, setResetTarget] = useState<Member | null>(null)
+  const [resetPassword, setResetPassword] = useState('')
+
+  // The member directory includes email addresses, so it is administrator-only.
+  const members = useQuery({
+    queryKey: ['members'],
+    queryFn: () => api.get<Member[]>('/users'),
+    enabled: isAdmin,
+    retry: false,
+  })
+
+  const createMember = useMutation({
+    mutationFn: () => api.post<Member>('/users', memberForm),
+    onSuccess: (created) => {
+      setMemberForm({ name: '', email: '', role: 'researcher', job_title: '', password: '' })
+      void queryClient.invalidateQueries({ queryKey: ['members'] })
+      void queryClient.invalidateQueries({ queryKey: ['session'] })
+      toast.push({
+        title: 'Account created',
+        message: `Give ${created.name} their password directly; this workspace has no email provider.`,
+        variant: 'success',
+      })
+    },
+    onError: (error) =>
+      toast.push({
+        title: 'Could not create the account',
+        message: (error as Error).message,
+        variant: 'error',
+      }),
+  })
+
+  const updateMember = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: { role?: UserRole; is_active?: boolean } }) =>
+      api.patch<Member>(`/users/${id}`, patch),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['members'] })
+      void queryClient.invalidateQueries({ queryKey: ['session'] })
+      toast.push({ title: 'Account updated', variant: 'success' })
+    },
+    onError: (error) =>
+      toast.push({
+        title: 'Could not update the account',
+        message: (error as Error).message,
+        variant: 'error',
+      }),
+  })
+
+  const resetMemberPassword = useMutation({
+    mutationFn: () =>
+      api.post<{ message: string }>(`/users/${resetTarget?.id}/password`, {
+        new_password: resetPassword,
+      }),
+    onSuccess: (result) => {
+      setResetTarget(null)
+      void queryClient.invalidateQueries({ queryKey: ['members'] })
+      toast.push({ title: 'Password reset', message: result.message, variant: 'success' })
+    },
+    onError: (error) =>
+      toast.push({
+        title: 'Could not reset the password',
+        message: (error as Error).message,
+        variant: 'error',
+      }),
   })
 
   const [exporting, setExporting] = useState<string | null>(null)
@@ -175,33 +250,201 @@ export function SettingsPage() {
             subtitle="Real accounts with hashed passwords and server-side sessions"
             icon={<Users size={14} />}
           >
-            <div className="table-wrap">
-              <table className="clh-table">
-                <thead>
-                  <tr>
-                    <th>Person</th>
-                    <th>Role</th>
-                    <th>What the role is for</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((entry) => (
-                    <tr key={entry.id}>
-                      <td>
-                        <span style={{ fontWeight: 600 }}>{entry.name}</span>
-                        <div className="cell-sub">{entry.job_title}</div>
-                      </td>
-                      <td>
-                        <Pill tone="outline">{titleCase(entry.role)}</Pill>
-                      </td>
-                      <td className="text-secondary-clh">{entry.description}</td>
-                      <td>{entry.id === user?.id ? <Pill tone="green">Current</Pill> : null}</td>
+            {isAdmin ? (
+              <div className="stack stack-3">
+                {members.isLoading && <LoadingBlock rows={4} />}
+                {members.error && (
+                  <ErrorState message="Accounts could not be loaded." onRetry={() => members.refetch()} />
+                )}
+                {members.data && (
+                  <div className="table-wrap">
+                    <table className="clh-table">
+                      <thead>
+                        <tr>
+                          <th>Person</th>
+                          <th>Role</th>
+                          <th>Status</th>
+                          <th style={{ textAlign: 'right' }}>Account</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {members.data.map((entry) => (
+                          <tr key={entry.id}>
+                            <td>
+                              <span style={{ fontWeight: 600 }}>{entry.name}</span>
+                              <div className="cell-sub">{entry.email}</div>
+                            </td>
+                            <td>
+                              <select
+                                className="form-select form-select-sm"
+                                aria-label={`Role for ${entry.name}`}
+                                value={entry.role}
+                                disabled={entry.id === user?.id || updateMember.isPending}
+                                onChange={(event) =>
+                                  updateMember.mutate({
+                                    id: entry.id,
+                                    patch: { role: event.target.value as UserRole },
+                                  })
+                                }
+                              >
+                                {ROLE_OPTIONS.map((role) => (
+                                  <option key={role} value={role}>
+                                    {titleCase(role)}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
+                              {entry.is_active ? (
+                                <Pill tone="green">Active</Pill>
+                              ) : (
+                                <Pill tone="neutral">Deactivated</Pill>
+                              )}
+                              {entry.id === user?.id && (
+                                <>
+                                  {' '}
+                                  <Pill tone="outline">You</Pill>
+                                </>
+                              )}
+                            </td>
+                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              <button
+                                type="button"
+                                className="btn btn-outline-secondary btn-sm"
+                                disabled={entry.id === user?.id}
+                                onClick={() => {
+                                  setResetTarget(entry)
+                                  setResetPassword('')
+                                }}
+                              >
+                                <KeyRound size={12} /> Password
+                              </button>{' '}
+                              <button
+                                type="button"
+                                className="btn btn-outline-secondary btn-sm"
+                                disabled={entry.id === user?.id || updateMember.isPending}
+                                onClick={() =>
+                                  updateMember.mutate({
+                                    id: entry.id,
+                                    patch: { is_active: !entry.is_active },
+                                  })
+                                }
+                              >
+                                {entry.is_active ? 'Deactivate' : 'Reactivate'}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div>
+                  <div className="card-title" style={{ fontSize: 13 }}>
+                    <UserPlus size={13} /> Add a person
+                  </div>
+                  <div className="section-grid grid-2 mt-2" style={{ gap: 10 }}>
+                    <div>
+                      <label className="form-label" htmlFor="member-name">
+                        Name
+                      </label>
+                      <input
+                        id="member-name"
+                        className="form-control"
+                        value={memberForm.name}
+                        onChange={(event) => setMemberForm({ ...memberForm, name: event.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" htmlFor="member-email">
+                        Email
+                      </label>
+                      <input
+                        id="member-email"
+                        type="email"
+                        className="form-control"
+                        autoComplete="off"
+                        value={memberForm.email}
+                        onChange={(event) => setMemberForm({ ...memberForm, email: event.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label" htmlFor="member-role">
+                        Role
+                      </label>
+                      <select
+                        id="member-role"
+                        className="form-select"
+                        value={memberForm.role}
+                        onChange={(event) =>
+                          setMemberForm({ ...memberForm, role: event.target.value as UserRole })
+                        }
+                      >
+                        {ROLE_OPTIONS.map((role) => (
+                          <option key={role} value={role}>
+                            {titleCase(role)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label" htmlFor="member-password">
+                        Initial password
+                      </label>
+                      <input
+                        id="member-password"
+                        type="password"
+                        minLength={10}
+                        className="form-control"
+                        autoComplete="new-password"
+                        value={memberForm.password}
+                        onChange={(event) => setMemberForm({ ...memberForm, password: event.target.value })}
+                      />
+                      <div className="form-text">
+                        At least 10 characters. No email is sent, so hand it over directly.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm mt-2"
+                    disabled={createMember.isPending}
+                    onClick={() => createMember.mutate()}
+                  >
+                    <UserPlus size={13} /> {createMember.isPending ? 'Creating…' : 'Create account'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table className="clh-table">
+                  <thead>
+                    <tr>
+                      <th>Person</th>
+                      <th>Role</th>
+                      <th>What the role is for</th>
+                      <th />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {users.map((entry) => (
+                      <tr key={entry.id}>
+                        <td>
+                          <span style={{ fontWeight: 600 }}>{entry.name}</span>
+                          <div className="cell-sub">{entry.job_title}</div>
+                        </td>
+                        <td>
+                          <Pill tone="outline">{titleCase(entry.role)}</Pill>
+                        </td>
+                        <td className="text-secondary-clh">{entry.description}</td>
+                        <td>{entry.id === user?.id ? <Pill tone="green">Current</Pill> : null}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             <div className="mt-3">
               <Notice tone="warning" icon={<ShieldAlert size={15} />} title="Roles are enforced by the API">
                 Every write is authorised against the signed-in user's role on the server, and the browser cannot
@@ -299,6 +542,42 @@ export function SettingsPage() {
         <div className="definition">
           The API refuses this request unless the confirmation phrase matches, so it cannot happen by accident.
         </div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        show={resetTarget !== null}
+        title={`Reset password for ${resetTarget?.name ?? ''}`}
+        confirmLabel="Reset password"
+        busy={resetMemberPassword.isPending}
+        onCancel={() => setResetTarget(null)}
+        onConfirm={() => {
+          if (resetPassword.length < 10) {
+            toast.push({
+              title: 'Password is too short',
+              message: 'Use at least 10 characters.',
+              variant: 'error',
+            })
+            return
+          }
+          resetMemberPassword.mutate()
+        }}
+      >
+        <p style={{ marginBottom: 8 }}>
+          Their current password stops working and every existing session for that account is signed out.
+        </p>
+        <label className="form-label" htmlFor="reset-password">
+          New password
+        </label>
+        <input
+          id="reset-password"
+          type="password"
+          minLength={10}
+          autoComplete="new-password"
+          className="form-control"
+          value={resetPassword}
+          onChange={(event) => setResetPassword(event.target.value)}
+        />
+        <div className="definition mt-2">No email is sent; pass this on directly.</div>
       </ConfirmDialog>
     </div>
   )

@@ -69,6 +69,17 @@ export interface Session {
   notice: string
 }
 
+export interface Member {
+  id: string
+  name: string
+  email: string
+  role: UserRole
+  job_title: string
+  initials: string
+  is_active: boolean
+  created_at: string
+}
+
 export interface ProjectCounts {
   participants: number
   interviews: number
