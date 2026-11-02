@@ -175,8 +175,8 @@ export function AppShell() {
             <div className="demo-chip">
               <span style={{ fontWeight: 700, flex: 'none' }}>DEMO</span>
               <span>
-                Synthetic data only. Outreach, consent and recording are simulated — no customer is contacted and no
-                audio is captured.
+                Synthetic data only. Roles are enforced server-side. Outreach, consent and recording are simulated —
+                no customer is contacted and no audio is captured.
               </span>
             </div>
           )}
@@ -323,7 +323,7 @@ export function AppShell() {
                     <div className="notice notice-warning mt-2" style={{ padding: '6px 8px' }}>
                       <span className="notice-icon">DEMO</span>
                       <span style={{ fontSize: 11 }}>
-                        Role switching is a demonstration feature, not authentication.
+                        Demo entry issues a real session. Roles are enforced by the API; this is not SSO.
                       </span>
                     </div>
                   </div>
@@ -340,12 +340,12 @@ export function AppShell() {
                       type="button"
                       className="command-result"
                       onClick={() => {
-                        leave()
+                        void leave()
                         navigate('/')
                       }}
                       style={{ display: 'flex', gap: 8, alignItems: 'center' }}
                     >
-                      <LogOut size={14} /> Switch demonstration role
+                      <LogOut size={14} /> Sign out
                     </button>
                   </div>
                 </div>

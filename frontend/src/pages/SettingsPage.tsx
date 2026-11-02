@@ -78,12 +78,17 @@ export function SettingsPage() {
     onError: (error) => toast.push({ title: 'Reset failed', message: (error as Error).message, variant: 'error' }),
   })
 
+  const [exporting, setExporting] = useState<string | null>(null)
+
   const download = async (entity: string, label: string) => {
+    setExporting(entity)
     try {
-      await api.downloadCsv(`/exports/${entity}.csv`, `everyday-goods-${entity}-synthetic.csv`)
-      toast.push({ title: `${label} exported`, message: 'The CSV is labelled as synthetic data.', variant: 'success' })
+      const filename = await api.downloadCsv(`/exports/${entity}.csv`, `everyday-goods-${entity}.csv`)
+      toast.push({ title: `${label} exported`, message: `${filename} was written to your downloads.`, variant: 'success' })
     } catch (error) {
       toast.push({ title: 'Export failed', message: (error as Error).message, variant: 'error' })
+    } finally {
+      setExporting(null)
     }
   }
 
@@ -167,7 +172,7 @@ export function SettingsPage() {
 
           <SectionCard
             title="Users and roles"
-            subtitle="Demonstration identities. No passwords, sessions or tokens exist behind them."
+            subtitle="Real accounts with hashed passwords and server-side sessions"
             icon={<Users size={14} />}
           >
             <div className="table-wrap">
@@ -198,17 +203,17 @@ export function SettingsPage() {
               </table>
             </div>
             <div className="mt-3">
-              <Notice tone="warning" icon={<ShieldAlert size={15} />} title="Not a security boundary">
-                Role switching changes the demonstration entry point only. Every API request in this prototype is served
-                with the same permissions. Real authentication, sessions and server-side authorisation are a documented
-                dependency, not an implemented feature.
+              <Notice tone="warning" icon={<ShieldAlert size={15} />} title="Roles are enforced by the API">
+                Every write is authorised against the signed-in user's role on the server, and the browser cannot
+                choose a role for a request. The demonstration role picker only works while demo mode is enabled; it
+                issues a real session for a synthetic account, it is not an identity provider.
               </Notice>
             </div>
           </SectionCard>
 
           <SectionCard
-            title="Synthetic data exports"
-            subtitle="CSV extracts of the demonstration dataset — every file is marked as synthetic"
+            title="Data exports"
+            subtitle="CSV extracts of the records you are permitted to read; every download is audited"
             icon={<Download size={14} />}
           >
             <div className="section-grid grid-3" style={{ gap: 8 }}>
@@ -218,14 +223,15 @@ export function SettingsPage() {
                   type="button"
                   className="btn btn-outline-secondary btn-sm"
                   onClick={() => void download(entry.entity, entry.label)}
+                  disabled={exporting !== null}
                 >
-                  <Download size={12} /> {entry.label}
+                  <Download size={12} /> {exporting === entry.entity ? 'Exporting…' : entry.label}
                 </button>
               ))}
             </div>
             <div className="definition mt-3">
-              Exports include an <span className="mono">is_synthetic</span> column and an export timestamp, so a
-              spreadsheet taken out of context cannot be mistaken for real customer data.
+              Each row carries a <span className="mono">data_origin</span> column and an export timestamp. Contact
+              details, internal notes and user records are never included.
             </div>
           </SectionCard>
         </div>

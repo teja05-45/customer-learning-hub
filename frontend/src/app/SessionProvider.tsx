@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api, getDemoUserId, setDemoUserId } from '../services/api'
+import { ApiError, api } from '../services/api'
 import type { DemoUser, Session } from '../types'
 
 interface SessionContextValue {
@@ -9,8 +9,9 @@ interface SessionContextValue {
   error: unknown
   user: DemoUser | null
   users: DemoUser[]
-  enter: (user: DemoUser) => void
-  leave: () => void
+  enter: (user: DemoUser) => Promise<void>
+  signIn: (email: string, password: string) => Promise<void>
+  leave: () => Promise<void>
   refetchSession: () => void
   isDemo: boolean
 }
@@ -18,44 +19,69 @@ interface SessionContextValue {
 const SessionContext = createContext<SessionContextValue | null>(null)
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [selectedId, setSelectedId] = useState<string | null>(() => getDemoUserId())
-
-  const query = useQuery({
+  // The directory is public and only drives the entry screen.
+  const directory = useQuery({
     queryKey: ['session'],
     queryFn: () => api.get<Session>('/session'),
     staleTime: 60_000,
   })
 
-  const users = query.data?.users ?? []
-  const user = useMemo(() => users.find((entry) => entry.id === selectedId) ?? null, [users, selectedId])
+  // Identity comes from the server session cookie, never from local storage.
+  const me = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: () => api.get<DemoUser>('/auth/me'),
+    retry: false,
+    staleTime: 15_000,
+  })
 
-  const enter = useCallback((nextUser: DemoUser) => {
-    // A demonstration entry: the id is kept locally so a refresh does not lose
-    // context. It is not a credential and grants nothing on its own.
-    setDemoUserId(nextUser.id)
-    setSelectedId(nextUser.id)
-  }, [])
+  const refresh = useCallback(async () => {
+    await Promise.all([me.refetch(), directory.refetch()])
+  }, [me, directory])
 
-  const leave = useCallback(() => {
-    setDemoUserId(null)
-    setSelectedId(null)
-  }, [])
-
-  const value: SessionContextValue = {
-    session: query.data,
-    isLoading: query.isLoading,
-    error: query.error,
-    user,
-    users,
-    enter,
-    leave,
-    refetchSession: () => {
-      void query.refetch()
+  const enter = useCallback(
+    async (nextUser: DemoUser) => {
+      await api.post('/auth/demo', { user_id: nextUser.id })
+      await refresh()
     },
-    isDemo: query.data?.demo_mode ?? true,
-  }
+    [refresh],
+  )
 
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      await api.post('/auth/login', { email, password })
+      await refresh()
+    },
+    [refresh],
+  )
+
+  const leave = useCallback(async () => {
+    await api.post('/auth/logout')
+    await refresh()
+  }, [refresh])
+
+  const notSignedIn = me.error instanceof ApiError && me.error.status === 401
+  const error = directory.error ?? (me.error && !notSignedIn ? me.error : null)
+
+  return (
+    <SessionContext.Provider
+      value={{
+        session: directory.data,
+        isLoading: directory.isLoading || me.isLoading,
+        error,
+        user: me.data ?? null,
+        users: directory.data?.users ?? [],
+        enter,
+        signIn,
+        leave,
+        refetchSession: () => {
+          void refresh()
+        },
+        isDemo: directory.data?.demo_mode ?? true,
+      }}
+    >
+      {children}
+    </SessionContext.Provider>
+  )
 }
 
 export function useSession(): SessionContextValue {

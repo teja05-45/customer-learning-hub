@@ -1,4 +1,5 @@
-import { ShieldCheck, ArrowRight, Quote, Link2, ListChecks } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { ShieldCheck, ArrowRight, Quote, Link2, ListChecks, KeyRound } from 'lucide-react'
 import { useSession } from '../app/SessionProvider'
 import { errorMessage } from '../services/api'
 import { Spinner } from '../components/ui'
@@ -56,7 +57,37 @@ const VALUE_POINTS = [
 ]
 
 export function LoginPage() {
-  const { users, session, enter, isLoading } = useSession()
+  const { users, session, enter, signIn, isLoading } = useSession()
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [signingIn, setSigningIn] = useState(false)
+
+  const choose = async (user: (typeof users)[number]) => {
+    setError(null)
+    setBusyId(user.id)
+    try {
+      await enter(user)
+    } catch (caught) {
+      setError(errorMessage(caught))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const submitPassword = async (event: FormEvent) => {
+    event.preventDefault()
+    setError(null)
+    setSigningIn(true)
+    try {
+      await signIn(email.trim(), password)
+    } catch (caught) {
+      setError(errorMessage(caught))
+    } finally {
+      setSigningIn(false)
+    }
+  }
 
   return (
     <div className="login-shell">
@@ -106,40 +137,97 @@ export function LoginPage() {
 
       <main className="login-main">
         <div style={{ maxWidth: 460, width: '100%', margin: '0 auto' }}>
-          <div className="pill pill-blue">Demonstration entry</div>
+          <div className="pill pill-blue">Sign in</div>
           <h2 className="mt-3" style={{ fontSize: 24, letterSpacing: '-0.02em' }}>
-            Choose a role to explore the workspace
+            Open the research workspace
           </h2>
           <p className="page-description mt-2">
-            Each role opens the same shared workspace with a different starting view. No password is required because
-            this is a prototype — there is no authentication behind it.
+            Sign in with your email and password, or use a demonstration role when demo mode is enabled. The API
+            authorises every write against your role; the role picker is not a security boundary.
           </p>
 
-          <div className="stack stack-2 mt-3">
-            {isLoading && <div className="skeleton" style={{ height: 56 }} />}
-            {users.map((user) => (
-              <button key={user.id} type="button" className="role-card" onClick={() => enter(user)}>
-                <span className="avatar" style={{ width: 32, height: 32, fontSize: 11 }}>
-                  {user.initials}
-                </span>
-                <span style={{ flex: 1 }}>
-                  <span className="row-between">
-                    <span className="role-name">{user.name}</span>
-                    <span className="pill pill-outline">{titleCase(user.role)}</span>
-                  </span>
-                  <span className="role-desc d-block">{user.description}</span>
-                </span>
-                <ArrowRight size={15} style={{ marginTop: 8, color: 'var(--clh-text-tertiary)' }} />
+          <form className="mt-3" onSubmit={submitPassword}>
+            <div className="stack stack-2">
+              <div>
+                <label className="form-label" htmlFor="login-email">
+                  Email
+                </label>
+                <input
+                  id="login-email"
+                  type="email"
+                  className="form-control"
+                  autoComplete="username"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="form-label" htmlFor="login-password">
+                  Password
+                </label>
+                <input
+                  id="login-password"
+                  type="password"
+                  className="form-control"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                />
+              </div>
+              <button type="submit" className="btn btn-primary" disabled={signingIn}>
+                <KeyRound size={14} /> {signingIn ? 'Signing in…' : 'Sign in'}
               </button>
-            ))}
-          </div>
+            </div>
+          </form>
+
+          {error && (
+            <div className="notice notice-danger mt-3">
+              <span className="notice-icon">!</span>
+              <div>{error}</div>
+            </div>
+          )}
+
+          {session?.demo_mode && (
+            <>
+              <div className="inline mt-4" style={{ gap: 8 }}>
+                <div className="pill pill-outline">Demonstration entry</div>
+                <span className="definition">Only available while demo mode is enabled.</span>
+              </div>
+              <div className="stack stack-2 mt-2">
+                {isLoading && <div className="skeleton" style={{ height: 56 }} />}
+                {users.map((user) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    className="role-card"
+                    onClick={() => void choose(user)}
+                    disabled={busyId !== null}
+                  >
+                    <span className="avatar" style={{ width: 32, height: 32, fontSize: 11 }}>
+                      {user.initials}
+                    </span>
+                    <span style={{ flex: 1 }}>
+                      <span className="row-between">
+                        <span className="role-name">{user.name}</span>
+                        <span className="pill pill-outline">{titleCase(user.role)}</span>
+                      </span>
+                      <span className="role-desc d-block">{user.description}</span>
+                    </span>
+                    <ArrowRight size={15} style={{ marginTop: 8, color: 'var(--clh-text-tertiary)' }} />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           <div className="notice notice-warning mt-4">
             <span className="notice-icon">!</span>
             <div>
-              <strong>Role switching is a demonstration feature.</strong> It is not authentication, authorisation or a
-              security boundary. Every API request in this prototype is served with the same permissions regardless of
-              the role selected.
+              <strong>Demo entry creates a real session, but this is not SSO.</strong> The API enforces role
+              permissions on every write. Connecting an identity provider is the remaining production step; see
+              docs/AUTH.md.
             </div>
           </div>
 

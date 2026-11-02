@@ -7,7 +7,6 @@
  */
 
 export const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '') + '/api/v1'
-const DEMO_USER_KEY = 'clh.demoUserId'
 
 export class ApiError extends Error {
   status: number
@@ -21,15 +20,6 @@ export class ApiError extends Error {
     this.code = code
     this.details = details
   }
-}
-
-export function getDemoUserId(): string | null {
-  return window.localStorage.getItem(DEMO_USER_KEY)
-}
-
-export function setDemoUserId(id: string | null) {
-  if (id) window.localStorage.setItem(DEMO_USER_KEY, id)
-  else window.localStorage.removeItem(DEMO_USER_KEY)
 }
 
 type QueryValue = string | number | boolean | null | undefined | Array<string | number>
@@ -51,12 +41,9 @@ export function toQuery(params: Record<string, QueryValue>): string {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body) headers.set('Content-Type', 'application/json')
-  const demoUserId = getDemoUserId()
-  if (demoUserId) headers.set('X-Demo-User-Id', demoUserId)
-
   let response: Response
   try {
-    response = await fetch(`${API_BASE}${path}`, { ...init, headers })
+    response = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' })
   } catch {
     throw new ApiError(
       'The API could not be reached. Check that the backend is running, then retry.',
@@ -91,15 +78,45 @@ export const api = {
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: body === undefined ? undefined : JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
-  downloadCsv: async (path: string, filename: string) => {
-    const headers = new Headers()
-    const demoUserId = getDemoUserId()
-    if (demoUserId) headers.set('X-Demo-User-Id', demoUserId)
-    const response = await fetch(`${API_BASE}${path}`, { headers })
+  /**
+   * Download a CSV and return the filename the server actually used.
+   *
+   * The response is checked *before* any success message is shown: a failed
+   * request surfaces the API's own error envelope, not a generic message, and an
+   * empty body is treated as a failure rather than a silent no-op download.
+   */
+  downloadCsv: async (path: string, fallbackFilename: string): Promise<string> => {
+    let response: Response
+    try {
+      response = await fetch(`${API_BASE}${path}`, { credentials: 'include' })
+    } catch {
+      throw new ApiError(
+        'The API could not be reached, so nothing was downloaded.',
+        0,
+        'network_error',
+        null,
+      )
+    }
     if (!response.ok) {
-      throw new ApiError('The export could not be generated.', response.status, 'export_failed', null)
+      const isJson = (response.headers.get('content-type') ?? '').includes('application/json')
+      const payload = isJson ? await response.json().catch(() => null) : null
+      const envelope = payload as {
+        error?: { message?: string; code?: string; details?: unknown }
+      } | null
+      throw new ApiError(
+        envelope?.error?.message ?? `The export failed with status ${response.status}.`,
+        response.status,
+        envelope?.error?.code ?? 'export_failed',
+        envelope?.error?.details ?? null,
+      )
     }
     const blob = await response.blob()
+    if (blob.size === 0) {
+      throw new ApiError('The server returned an empty file.', response.status, 'export_empty', null)
+    }
+    const disposition = response.headers.get('content-disposition') ?? ''
+    const match = /filename="?([^";]+)"?/.exec(disposition)
+    const filename = match?.[1] ?? fallbackFilename
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -108,6 +125,7 @@ export const api = {
     link.click()
     link.remove()
     window.URL.revokeObjectURL(url)
+    return filename
   },
 }
 
