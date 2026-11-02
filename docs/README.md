@@ -1,55 +1,72 @@
-# Documentation index
+# Documentation Index
 
-Twenty-one documents describe this prototype — what it is for, how it is built, how to demo
-it, and what is deliberately missing — and this page indexes them. Read in order for a full
-picture, or jump to the question you have.
+Two sets exist. The **canonical set** below is the current reference and matches the
+implementation. The **original discovery set** (numbered files) records the thinking from the
+first build and is retained for context; where they disagree, the canonical set wins.
 
-## Product and design
+## Canonical set
 
-| Document | Answers |
+| Document | Read it for |
 | --- | --- |
-| [01-product-brief.md](01-product-brief.md) | Why this product exists, the problem, the promise, what is in and out of scope |
-| [02-users-and-roles.md](02-users-and-roles.md) | The seven seeded people and the five roles, plus what each role needs |
-| [03-core-workflows.md](03-core-workflows.md) | The five journeys: plan, recruit, interview, synthesise, decide and follow up |
-| [04-information-architecture.md](04-information-architecture.md) | Screen map, navigation, URL structure, cross-linking rules |
-| [08-design-system.md](08-design-system.md) | Tokens, typography, components, layout rules, tone of voice |
-| [14-accessibility.md](14-accessibility.md) | Keyboard, focus, contrast, semantics, what was tested and what was not |
+| [PRD](PRD.md) | Business problem, users, requirements, non-goals, success signals |
+| [ARCHITECTURE](ARCHITECTURE.md) | Module boundaries, services, data integrity, trade-offs |
+| [HLD](HLD.md) | Containers, flows, non-functional requirements, failure behaviour |
+| [LLD](LLD.md) | Functions, algorithms, rule implementations, test seams |
+| [TECH_STACK](TECH_STACK.md) | Pinned versions and deliberate omissions |
+| [DESIGN](DESIGN.md) | Palette, typography, components, required states, accessibility |
+| [DATABASE](DATABASE.md) | ERD, tables, constraints, migrations, seeding |
+| [API](API.md) | Endpoint reference, status vocabularies, examples |
+| [AUTH](AUTH.md) | Demo identity, why it is not authentication, production path |
+| [SECURITY](SECURITY.md) | Data minimisation, consent, validation, threat table |
+| [TESTING](TESTING.md) | Suites, commands, actual results, what is not covered |
+| [DEPLOYMENT](DEPLOYMENT.md) | Docker, Windows setup, environment, troubleshooting |
+| [OPERATIONS](OPERATIONS.md) | Runbook, backup, incidents, rollback, handover |
+| [IMPLEMENTATION_PLAN](IMPLEMENTATION_PLAN.md) | Three-week FDE plan, dependencies, ownership |
+| [TASKS](TASKS.md) | Delivered work and prioritised remaining work |
+| [ROADMAP](ROADMAP.md) | Now / next / later, and what is not planned |
+| [CHANGELOG](CHANGELOG.md) | What changed in the hardening release |
+| [DECISIONS](DECISIONS.md) | Twelve architecture decisions with consequences |
+| [RISKS](RISKS.md) | Risk register, open questions, escalation |
+| [ACCEPTANCE_CRITERIA](ACCEPTANCE_CRITERIA.md) | Every criterion with verification evidence |
+| [DEFECT_REGISTER](DEFECT_REGISTER.md) | Confirmed defects, gaps, non-reproduced reports |
+| [STAGE_COMPLETION_REPORT](STAGE_COMPLETION_REPORT.md) | Delivered scope, results, remaining gaps |
 
-## Data and interfaces
+## Original discovery set
 
-| Document | Answers |
+| Document | Topic |
 | --- | --- |
-| [05-data-model.md](05-data-model.md) | Every table, relationship and enum, and why evidence is modelled the way it is |
-| [06-api-reference.md](06-api-reference.md) | All 61 endpoints, request and response shapes, error envelope, filters |
-| [07-frontend-architecture.md](07-frontend-architecture.md) | React structure, data fetching, session handling, formatting, error surfaces |
-| [10-data-dictionary.md](10-data-dictionary.md) | Field-by-field reference for exports and for anyone reading the database |
+| [01-product-brief](01-product-brief.md) | Initial product framing |
+| [02-users-and-roles](02-users-and-roles.md) | Roles and permissions thinking |
+| [03-core-workflows](03-core-workflows.md) | Workflow narrative |
+| [04-information-architecture](04-information-architecture.md) | Screens and navigation |
+| [05-data-model](05-data-model.md) | Data model rationale |
+| [06-api-reference](06-api-reference.md) | Narrative API examples |
+| [07-frontend-architecture](07-frontend-architecture.md) | Component structure |
+| [08-design-system](08-design-system.md) | Original design tokens |
+| [09-demo-script](09-demo-script.md) | Walkthrough for a reviewer |
+| [10-data-dictionary](10-data-dictionary.md) | Field-level definitions |
+| [11-testing](11-testing.md) | Original test strategy |
+| [12-deployment](12-deployment.md) | Original deployment notes |
+| [13-security-and-privacy](13-security-and-privacy.md) | Privacy analysis |
+| [14-accessibility](14-accessibility.md) | Accessibility rationale |
+| [15-tradeoffs](15-tradeoffs.md) | Product and technical trade-offs |
+| [16-metrics](16-metrics.md) | Metric definitions and limits |
+| [17-limitations-and-next-steps](17-limitations-and-next-steps.md) | Known gaps |
+| [18-evaluation-guide](18-evaluation-guide.md) | How to assess the prototype |
+| [19-maintenance-runbook](19-maintenance-runbook.md) | Original runbook |
+| [20-three-week-plan](20-three-week-plan.md) | Original delivery plan |
 
-## Running and judging it
+## Suggested reading order
 
-| Document | Answers |
-| --- | --- |
-| [09-demo-script.md](09-demo-script.md) | A 12-minute walkthrough with the exact clicks and what to say |
-| [18-evaluation-guide.md](18-evaluation-guide.md) | Questions to ask of the prototype, with where to look for the answer |
-| [16-metrics.md](16-metrics.md) | What the analytics screen measures, what it refuses to measure, and why |
-| [11-testing.md](11-testing.md) | Test strategy, what is covered, how to run it, what is not covered |
-| [12-deployment.md](12-deployment.md) | Local, Docker and hosting options, environment variables, operations |
-| [19-maintenance-runbook.md](19-maintenance-runbook.md) | Common tasks: reset, migrate, export, rotate data, debug |
+1. `../README.md` — run it in two minutes.
+2. `PRD.md` — why it exists.
+3. `ARCHITECTURE.md` then `HLD.md` — how it is built.
+4. `DEFECT_REGISTER.md` and `ACCEPTANCE_CRITERIA.md` — what was actually verified.
+5. `AUTH.md`, `SECURITY.md`, `RISKS.md` — honest limits.
+6. `09-demo-script.md` — follow along with the app open.
 
-## Decisions, risk and plan
+## Maintaining this set
 
-| Document | Answers |
-| --- | --- |
-| [15-tradeoffs.md](15-tradeoffs.md) | Every significant technical and product decision, with the alternative rejected |
-| [AUTH.md](AUTH.md) | What "demo login" really is, and the concrete plan for real authentication |
-| [13-security-and-privacy.md](13-security-and-privacy.md) | Threat model for a research tool, data minimisation, what would block production |
-| [17-limitations-and-next-steps.md](17-limitations-and-next-steps.md) | Known gaps ranked by risk, and the next four increments |
-| [20-three-week-plan.md](20-three-week-plan.md) | The three-week build plan that produced this, week by week, with acceptance criteria |
-
-## Screenshots
-
-`docs/screenshots/` holds 18 captures generated by the Playwright suite
-(`frontend/e2e/screenshots.spec.ts`), including a mobile viewport. Regenerate them with:
-
-```bash
-cd frontend && npx playwright test e2e/screenshots.spec.ts
-```
+When behaviour changes, update the canonical document in the same commit as the code. The
+acceptance criteria and testing documents must state only checks that were executed; a defect
+moves from `DEFECT_REGISTER` to `CHANGELOG` only after its verification passes.
