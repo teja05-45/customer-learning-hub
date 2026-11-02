@@ -2,10 +2,16 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Modal } from 'react-bootstrap'
-import { ArrowLeft, CheckCircle2, Link2, Plus } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Link2, Pencil, Plus } from 'lucide-react'
 import { api, toQuery } from '../services/api'
 import { useToast } from '../app/ToastProvider'
-import type { EvidenceListResponse, InsightDetail, InsightStatus, SearchResult } from '../types'
+import type {
+  Confidence,
+  EvidenceListResponse,
+  InsightDetail,
+  InsightStatus,
+  SearchResult,
+} from '../types'
 import {
   EmptyState,
   ErrorState,
@@ -42,6 +48,14 @@ export function InsightDetailPage() {
   const [linkOpen, setLinkOpen] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
   const [role, setRole] = useState<'supporting' | 'contradictory'>('supporting')
+  const [editOpen, setEditOpen] = useState(false)
+  const [form, setForm] = useState({
+    title: '',
+    summary: '',
+    interpretation: '',
+    limitations: '',
+    confidence: 'low' as Confidence,
+  })
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['insight', insightId],
@@ -82,6 +96,35 @@ export function InsightDetailPage() {
       })
     },
     onError: (error) => toast.push({ title: 'Status change rejected', message: (error as Error).message, variant: 'error' }),
+  })
+
+  const openEdit = () => {
+    if (!data) return
+    setForm({
+      title: data.title,
+      summary: data.summary,
+      interpretation: data.interpretation,
+      limitations: data.limitations,
+      confidence: data.confidence,
+    })
+    setEditOpen(true)
+  }
+
+  const updateInsight = useMutation({
+    mutationFn: () =>
+      api.patch<InsightDetail>(`/insights/${insightId}`, {
+        title: form.title.trim(),
+        summary: form.summary.trim(),
+        interpretation: form.interpretation.trim(),
+        limitations: form.limitations.trim(),
+        confidence: form.confidence,
+      }),
+    onSuccess: () => {
+      invalidate()
+      setEditOpen(false)
+      toast.push({ title: 'Insight updated', variant: 'success' })
+    },
+    onError: (error) => toast.push({ title: 'Could not save insight', message: (error as Error).message, variant: 'error' }),
   })
 
   const linkEvidence = useMutation({
@@ -159,6 +202,9 @@ export function InsightDetailPage() {
         }
         actions={
           <>
+            <button type="button" className="btn btn-outline-secondary" onClick={openEdit}>
+              <Pencil size={13} /> Edit insight
+            </button>
             {STATUS_ACTIONS.filter((action) => action.status !== data.status).map((action) => (
               <button
                 key={action.status}
@@ -340,6 +386,101 @@ export function InsightDetailPage() {
           </SectionCard>
         </div>
       </div>
+
+      <Modal show={editOpen} onHide={() => setEditOpen(false)} centered size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Edit insight</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="stack stack-3">
+            <div>
+              <label className="form-label" htmlFor="insight-edit-title">
+                Title<span className="required-mark">*</span>
+              </label>
+              <input
+                id="insight-edit-title"
+                className="form-control"
+                value={form.title}
+                onChange={(event) => setForm({ ...form, title: event.target.value })}
+              />
+            </div>
+            <div>
+              <label className="form-label" htmlFor="insight-edit-summary">
+                What the evidence shows<span className="required-mark">*</span>
+              </label>
+              <textarea
+                id="insight-edit-summary"
+                className="form-control"
+                rows={4}
+                value={form.summary}
+                onChange={(event) => setForm({ ...form, summary: event.target.value })}
+              />
+              <div className="form-text">Describe the observation, not the recommendation.</div>
+            </div>
+            <div>
+              <label className="form-label" htmlFor="insight-edit-interpretation">
+                Researcher interpretation
+              </label>
+              <textarea
+                id="insight-edit-interpretation"
+                className="form-control"
+                rows={3}
+                value={form.interpretation}
+                onChange={(event) => setForm({ ...form, interpretation: event.target.value })}
+              />
+              <div className="form-text">Kept separate from the customer's words everywhere it appears.</div>
+            </div>
+            <div className="section-grid grid-2" style={{ gap: 12 }}>
+              <div>
+                <label className="form-label" htmlFor="insight-edit-confidence">
+                  Confidence
+                </label>
+                <select
+                  id="insight-edit-confidence"
+                  className="form-select"
+                  value={form.confidence}
+                  onChange={(event) => setForm({ ...form, confidence: event.target.value as Confidence })}
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+              <div className="definition" style={{ alignSelf: 'end' }}>
+                Changing confidence is a judgement, not a recalculation.
+              </div>
+            </div>
+            <div>
+              <label className="form-label" htmlFor="insight-edit-limitations">
+                Limitations
+              </label>
+              <textarea
+                id="insight-edit-limitations"
+                className="form-control"
+                rows={3}
+                value={form.limitations}
+                onChange={(event) => setForm({ ...form, limitations: event.target.value })}
+              />
+              <div className="form-text">
+                Sample size and what this study cannot tell you. Shown wherever the insight is reused.
+              </div>
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <button type="button" className="btn btn-outline-secondary" onClick={() => setEditOpen(false)}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={form.title.trim().length < 5 || form.summary.trim().length < 20 || updateInsight.isPending}
+            onClick={() => updateInsight.mutate()}
+          >
+            {updateInsight.isPending ? 'Saving…' : 'Save changes'}
+          </button>
+        </Modal.Footer>
+      </Modal>
 
       <Modal show={linkOpen} onHide={() => setLinkOpen(false)} centered size="lg">
         <Modal.Header closeButton>
