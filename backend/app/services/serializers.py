@@ -148,7 +148,9 @@ def recruitment_out(
     users: dict[str, Ref] | None = None,
     include_events: bool = False,
 ) -> RecruitmentOut:
-    users = users or user_map(db, {record.updated_by_id})
+    events = record.events if include_events else []
+    actor_ids = {record.updated_by_id} | {event.actor_id for event in events}
+    users = users or user_map(db, actor_ids)
     participant = db.get(Participant, record.participant_id)
     project = db.get(ResearchProject, record.project_id)
     now = datetime.now(record.updated_at.tzinfo) if record.updated_at and record.updated_at.tzinfo else datetime.now()
@@ -177,7 +179,7 @@ def recruitment_out(
                 created_at=e.created_at,
                 actor=users.get(e.actor_id or "") if e.actor_id else None,
             )
-            for e in (record.events if include_events else [])
+            for e in events
         ],
     )
 
