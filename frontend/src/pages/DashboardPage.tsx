@@ -4,9 +4,6 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -241,55 +238,37 @@ export function DashboardPage() {
           ) : (
             <>
               <div
-                style={{ height: 168 }}
-                role="img"
-                aria-label="Synthetic participants by customer segment"
+                className="stack stack-3"
+                role="list"
+                aria-label="Participants and evidence by customer segment"
               >
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart role="img" aria-label="Synthetic participants by customer segment">
-                    <Pie
-                      data={data.segments.map((segment) => ({
-                        name: SEGMENT_LABELS[segment.segment],
-                        value: segment.participants,
-                      }))}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={42}
-                      outerRadius={64}
-                      paddingAngle={2}
-                      stroke="#fff"
-                      strokeWidth={2}
-                    >
-                      {data.segments.map((_, index) => (
-                        <Cell key={index} fill={CHART_COLOURS[index % CHART_COLOURS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
-                      formatter={(value: number, name: string) => [`${value} participants`, name]}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="stack stack-1 mt-2">
-                {data.segments.map((segment, index) => (
-                  <div className="row-between" key={segment.segment} style={{ fontSize: 12 }}>
-                    <span className="inline">
-                      <span
-                        style={{
-                          width: 7,
-                          height: 7,
-                          borderRadius: 99,
-                          background: CHART_COLOURS[index % CHART_COLOURS.length],
-                        }}
-                      />
-                      {SEGMENT_LABELS[segment.segment]}
-                    </span>
-                    <span className="text-secondary-clh">
-                      {segment.participants} people · {segment.evidence} evidence
-                    </span>
-                  </div>
-                ))}
+                {data.segments.map((segment, index) => {
+                  const total = data.segments.reduce((sum, point) => sum + point.participants, 0) || 1
+                  const share = Math.round((segment.participants / total) * 100)
+                  return (
+                    <div key={segment.segment} role="listitem">
+                      <div className="row-between" style={{ fontSize: 12 }}>
+                        <span className="inline">
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: 99,
+                              background: CHART_COLOURS[index % CHART_COLOURS.length],
+                            }}
+                          />
+                          {SEGMENT_LABELS[segment.segment]}
+                        </span>
+                        <span className="text-secondary-clh">
+                          {segment.participants} people · {segment.evidence} evidence · {share}%
+                        </span>
+                      </div>
+                      <div className="mt-1">
+                        <ProgressBar value={share} />
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
               <HonestyNote>
                 More conversations with repeat buyers will never reveal why lapsed customers left. Coverage matters
