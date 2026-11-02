@@ -216,6 +216,11 @@ def link_evidence(
     evidence = db.get(Evidence, payload.evidence_id)
     if evidence is None:
         raise NotFoundError(f"Evidence '{payload.evidence_id}' does not exist.")
+    if insight.project_id and evidence.project_id != insight.project_id:
+        raise RuleViolationError(
+            "Evidence from a different research project cannot be linked to this insight.",
+            details={"evidence_id": evidence.id},
+        )
 
     existing = db.execute(
         select(InsightEvidence).where(
