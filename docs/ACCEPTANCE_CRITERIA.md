@@ -82,7 +82,7 @@ Status is based on executed checks. "Verified" names the test or manual check us
 | G2 | Demo role entry is labelled as non-authentication | Pass | Session notice test |
 | G3 | CSV exports are labelled synthetic and formula-safe | Pass | Export test; `_csv_safe` |
 | G4 | No secrets or `.env` in the image or repository | Pass | `.dockerignore`; `.gitignore` |
-| G5 | Backend tests pass | Pass | 42 passed |
+| G5 | Backend tests pass | Pass | 46 passed |
 | G6 | Frontend typecheck and build pass | Pass | `tsc --noEmit`, `vite build` |
 | G7 | Browser journey and accessibility checks pass | Pass | 7 Playwright tests |
 | G8 | Docker Compose starts and both services are healthy | Pass | Compose verification |

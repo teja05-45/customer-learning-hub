@@ -32,8 +32,9 @@ The Playwright suite expects the API at `http://127.0.0.1:8000/api/v1` (override
 | `tests/test_metrics.py` | Dashboard/analytics agreement, counter movement on new records, overdue lifecycle, reuse definition, segment totals reconciling with the directory |
 | `tests/test_pipeline.py` | Contacted/response-rate definitions, distinct-participant counting, interview-driven history events, stage-count/filter agreement, coverage derivation |
 | `tests/test_integrity.py` | Database constraints, link uniqueness, sufficiency recomputation, archive behaviour |
+| `tests/test_seed.py` | Demo reset repeatability, unique generated codes, synthetic labelling, provenance mix |
 
-Final verified result: **42 passed** (`pytest -q`, one third-party Starlette deprecation
+Final verified result: **46 passed** (`pytest -q`, one third-party Starlette deprecation
 warning, no failures).
 
 ## Frontend verification
