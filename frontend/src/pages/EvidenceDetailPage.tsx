@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ExternalLink, Trash2 } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Pencil, Trash2 } from 'lucide-react'
+import { Modal } from 'react-bootstrap'
 import { api } from '../services/api'
 import { useToast } from '../app/ToastProvider'
 import type { Evidence } from '../types'
@@ -24,6 +25,8 @@ export function EvidenceDetailPage() {
   const toast = useToast()
   const queryClient = useQueryClient()
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [provenanceOpen, setProvenanceOpen] = useState(false)
+  const [provenanceDraft, setProvenanceDraft] = useState('')
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['evidence-item', evidenceId],
@@ -40,6 +43,38 @@ export function EvidenceDetailPage() {
       navigate('/evidence')
     },
     onError: (error) => toast.push({ title: 'Could not delete', message: (error as Error).message, variant: 'error' }),
+  })
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ['evidence-item', evidenceId] })
+    void queryClient.invalidateQueries({ queryKey: ['evidence'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+  }
+
+  const setReview = useMutation({
+    mutationFn: (review_status: 'unreviewed' | 'reviewed' | 'flagged') =>
+      api.patch<Evidence>(`/evidence/${evidenceId}`, { review_status }),
+    onSuccess: (_body, review_status) => {
+      refresh()
+      toast.push({ title: `Review status set to ${titleCase(review_status)}`, variant: 'success' })
+    },
+    onError: (error) => toast.push({ title: 'Could not update review', message: (error as Error).message, variant: 'error' }),
+  })
+
+  const saveProvenance = useMutation({
+    mutationFn: () => api.patch<Evidence>(`/evidence/${evidenceId}`, { provenance: provenanceDraft.trim() }),
+    onSuccess: () => {
+      refresh()
+      setProvenanceOpen(false)
+      toast.push({
+        title: 'Provenance saved',
+        message: provenanceDraft.trim()
+          ? 'The source is recorded, so this can now be checked.'
+          : 'The record is unverified again and flagged for review.',
+        variant: 'success',
+      })
+    },
+    onError: (error) => toast.push({ title: 'Could not save provenance', message: (error as Error).message, variant: 'error' }),
   })
 
   if (isLoading) {
@@ -80,9 +115,21 @@ export function EvidenceDetailPage() {
           </div>
         }
         actions={
-          <button type="button" className="btn btn-danger-soft" onClick={() => setDeleteOpen(true)}>
-            <Trash2 size={13} /> Delete evidence
-          </button>
+          <>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => {
+                setProvenanceDraft(data.provenance)
+                setProvenanceOpen(true)
+              }}
+            >
+              <Pencil size={13} /> Correct provenance
+            </button>
+            <button type="button" className="btn btn-danger-soft" onClick={() => setDeleteOpen(true)}>
+              <Trash2 size={13} /> Delete evidence
+            </button>
+          </>
         }
       />
 
@@ -157,6 +204,28 @@ export function EvidenceDetailPage() {
             </div>
           </SectionCard>
 
+          <SectionCard title="Review this evidence" subtitle="Reviewing is a team action, not a quality guarantee">
+            <div className="stack stack-2">
+              <div className="tag-row">
+                {(['unreviewed', 'reviewed', 'flagged'] as const).map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    className={`filter-chip${data.review_status === status ? ' active' : ''}`}
+                    disabled={setReview.isPending}
+                    onClick={() => setReview.mutate(status)}
+                  >
+                    {titleCase(status)}
+                  </button>
+                ))}
+              </div>
+              <div className="definition">
+                Flagging keeps the record in place. A source can be corrected without pretending the original capture was
+                complete.
+              </div>
+            </div>
+          </SectionCard>
+
           <SectionCard title="Provenance statement">
             {data.provenance ? (
               <div className="provenance-block">
@@ -171,6 +240,42 @@ export function EvidenceDetailPage() {
           </SectionCard>
         </div>
       </div>
+
+      <Modal show={provenanceOpen} onHide={() => setProvenanceOpen(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Correct the provenance</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <label className="form-label" htmlFor="evidence-provenance">
+            Where did this come from?
+          </label>
+          <textarea
+            id="evidence-provenance"
+            className="form-control"
+            rows={3}
+            value={provenanceDraft}
+            onChange={(event) => setProvenanceDraft(event.target.value)}
+            placeholder="e.g. INT-0004 · 00:12:30, follow-up question about fragrance"
+          />
+          <div className="definition mt-2">
+            Leaving this empty marks the record unverified again and flags it for review. Clearing a source never makes
+            the claim stronger.
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <button type="button" className="btn btn-outline-secondary" onClick={() => setProvenanceOpen(false)}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={saveProvenance.isPending}
+            onClick={() => saveProvenance.mutate()}
+          >
+            {saveProvenance.isPending ? 'Saving…' : 'Save provenance'}
+          </button>
+        </Modal.Footer>
+      </Modal>
 
       <ConfirmDialog
         show={deleteOpen}
