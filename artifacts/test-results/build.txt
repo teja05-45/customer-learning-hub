@@ -1,0 +1,18 @@
+
+> customer-learning-hub-frontend@1.0.0 build
+> tsc -b && vite build
+
+[36mvite v6.4.5 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 2583 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                 [39m[1m[2m  0.58 kB[22m[1m[22m[2m │ gzip:   0.35 kB[22m
+[2mdist/[22m[35massets/index-B2KGAV3t.css  [39m[1m[2m251.55 kB[22m[1m[22m[2m │ gzip:  35.63 kB[22m
+[2mdist/[22m[36massets/index-Bcoh8Ndx.js   [39m[1m[33m969.50 kB[39m[22m[2m │ gzip: 266.57 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 7.74s[39m

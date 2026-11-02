@@ -1,0 +1,34 @@
+# API verification — 2026-11-02T16:32:50Z
+Database: empty SQLite, DEMO_MODE=false
+
+## Health before any account exists
+{"status":"ok","version":"1.0.0","environment":"development","database":"ok","demo_mode":false,"seeded":false,"checked_at":"2026-11-02T16:32:50.810916Z"}
+
+## Data routes require a session
+GET /projects anonymous -> 401
+GET /exports/participants.csv anonymous -> 401
+
+## First-run registration claims the workspace
+{"id":"fdc5b57f-661d-4f31-8bc4-b65add6fabbe","name":"Verification Admin","email":"verify@example.test","role":"admin","job_title":"Workspace administrator","initials":"VA"}
+status=201
+
+GET /auth/me -> 200
+Registration closed on second attempt -> 403
+
+## Real records created through the API
+project created -> {"id":"4a3f52c6-c8dd-432a-b5e2-ddaa59bb063a","name":"Verification project","objective":"Prove the API persists real records from an empty database.","descriptio…
+participant created -> {"id":"ba35985c-b5b3-4c3c-a226-1d125b144ea1","code":"P-0001","display_name":"Zoë Ångström","segment":"repeat_buyer","purchase_frequency":"Every 6 weeks","ord…
+
+## CSV export with a real session
+HTTP/1.1 200 OK
+content-disposition: attachment; filename="everyday-goods-participants-live.csv"
+content-type: text/csv; charset=utf-8
+x-data-origin: live-production-data
+x-row-count: 1
+--- file head ---
+﻿code,display_name,segment,purchase_frequency,orders_count,product_category,eligibility,data_origin,exported_at
+P-0001,Zoë Ångström,repeat_buyer,Every 6 weeks,1,Shampoo,eligible,live,2026-11-02T16:32:51.687053+00:00
+
+## Sign-out revokes the session
+POST /auth/logout -> 200
+GET /auth/me after logout -> 401

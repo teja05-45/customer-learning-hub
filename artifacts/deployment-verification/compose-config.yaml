@@ -1,0 +1,53 @@
+name: customer-learning-hub
+services:
+  backend:
+    build:
+      context: C:\Users\tejam\Music\ai wah labs\backend
+      dockerfile: Dockerfile
+    container_name: clh-api
+    environment:
+      CORS_ORIGINS: http://localhost:8081,http://127.0.0.1:8081
+      DATABASE_URL: sqlite:////app/data/clh.db
+      DEMO_MODE: "true"
+      ENVIRONMENT: production
+      LOG_LEVEL: INFO
+      SEED_DEMO_DATA: "true"
+      SEED_ON_STARTUP: "true"
+    image: customer-learning-hub-api:1.0.0
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 8000
+        published: "8000"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: clh-data
+        target: /app/data
+        volume: {}
+  frontend:
+    build:
+      context: C:\Users\tejam\Music\ai wah labs\frontend
+      dockerfile: Dockerfile
+    container_name: clh-web
+    depends_on:
+      backend:
+        condition: service_healthy
+        required: true
+    image: customer-learning-hub-web:1.0.0
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 8080
+        published: "8081"
+        protocol: tcp
+    restart: unless-stopped
+networks:
+  default:
+    name: customer-learning-hub_default
+volumes:
+  clh-data:
+    name: customer-learning-hub_clh-data
