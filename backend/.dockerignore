@@ -2,7 +2,16 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 data/*.db
+data/*.db-journal
+data/*.csv
 tests/
 docs/
+.env
+.env.*
+!.env.example
 *.egg-info/
+.alembic_cache/
