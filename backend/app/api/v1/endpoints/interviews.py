@@ -38,6 +38,7 @@ from app.schemas.interview import (
 )
 from app.services.activity import log_activity
 from app.services.common import next_code
+from app.services.pipeline import advance_stage
 from app.services.serializers import interview_detail, interview_summary
 from app.services.templates import DEFAULT_INTERVIEW_GUIDE, GUIDE_QUALITY_RULES
 
@@ -148,9 +149,17 @@ def create_interview(
             )
         )
 
-    if payload.scheduled_at and recruitment and recruitment.stage in ("invited", "responded"):
-        recruitment.stage = "scheduled"
-        recruitment.updated_at = datetime.now(timezone.utc)
+    if payload.scheduled_at and recruitment and recruitment.stage in ("identified", "selected", "invited", "responded"):
+        # Booking a conversation is itself progress. Participants who were never
+        # invited are still shown as scheduled, because the interview exists.
+        advance_stage(
+            db,
+            recruitment,
+            "scheduled",
+            note=f"Interview {interview.code} booked.",
+            actor_id=actor.id if actor else None,
+            force=True,
+        )
 
     log_activity(
         db,
@@ -217,19 +226,29 @@ def update_interview(
                     details={"allowed": sorted(allowed)},
                 )
             interview.status = new_status
+            recruitment = (
+                db.get(RecruitmentRecord, interview.recruitment_id) if interview.recruitment_id else None
+            )
             if new_status == "completed":
                 interview.completed_at = datetime.now(timezone.utc)
-                recruitment = (
-                    db.get(RecruitmentRecord, interview.recruitment_id) if interview.recruitment_id else None
-                )
                 if recruitment:
-                    recruitment.stage = "completed"
-                    recruitment.updated_at = datetime.now(timezone.utc)
+                    advance_stage(
+                        db,
+                        recruitment,
+                        "completed",
+                        note=f"Interview {interview.code} completed.",
+                        actor_id=actor.id if actor else None,
+                        force=True,
+                    )
                     recruitment.next_action = "Capture and link evidence, then close the loop with the participant."
-            if new_status == "cancelled" and interview.recruitment_id:
-                recruitment = db.get(RecruitmentRecord, interview.recruitment_id)
-                if recruitment and recruitment.stage == "scheduled":
-                    recruitment.stage = "cancelled"
+            if new_status == "cancelled" and recruitment and recruitment.stage == "scheduled":
+                advance_stage(
+                    db,
+                    recruitment,
+                    "cancelled",
+                    note=f"Interview {interview.code} cancelled.",
+                    actor_id=actor.id if actor else None,
+                )
             log_activity(
                 db,
                 entity_type="interview",
