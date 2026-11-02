@@ -119,7 +119,20 @@ export const STAGE_LABELS: Record<RecruitmentStage, string> = {
   withdrawn: 'Withdrawn',
 }
 
-export const PIPELINE_STAGES: RecruitmentStage[] = ['identified', 'selected', 'invited', 'responded', 'scheduled', 'completed']
+// Every stage is visible, including the terminal ones. Hiding declines and
+// no-responses would make the pipeline look more successful than it is.
+export const PIPELINE_STAGES: RecruitmentStage[] = [
+  'identified',
+  'selected',
+  'invited',
+  'responded',
+  'scheduled',
+  'completed',
+  'declined',
+  'no_response',
+  'cancelled',
+  'withdrawn',
+]
 
 export const RECRUITMENT_TRANSITIONS: Record<RecruitmentStage, RecruitmentStage[]> = {
   identified: ['selected', 'cancelled'],
