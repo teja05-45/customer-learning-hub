@@ -10,37 +10,19 @@ from sqlalchemy import func, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1.router import api_router
+from app.core.auth import AuthMiddleware
 from app.core.config import settings
 from app.core.database import SessionLocal, init_db
 from app.core.errors import AppError
 from app.core.logging import configure_logging, get_logger
 from app.models import User
-from app.seed.demo_data import seed_demo_data
-
 configure_logging()
 logger = get_logger("app.startup")
-
-
-def _ensure_seed_data() -> None:
-    db = SessionLocal()
-    try:
-        if db.execute(select(func.count(User.id))).scalar_one() == 0:
-            counts = seed_demo_data(db)
-            logger.info("seeded synthetic demo data: %s", counts)
-        else:
-            logger.info("existing data found; seed skipped")
-    except Exception:  # pragma: no cover - startup guard
-        logger.exception("demo seed failed; the API will start without demo data")
-        db.rollback()
-    finally:
-        db.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    if settings.seed_on_startup and settings.seed_demo_data:
-        _ensure_seed_data()
     logger.info("API ready (environment=%s, demo_mode=%s)", settings.environment, settings.demo_mode)
     yield
 
@@ -49,16 +31,18 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description=(
-        "Evidence-first customer research management API. All data is synthetic. "
-        "There is no authentication in this prototype — see /api/v1/session and docs/AUTH.md."
+        "Evidence-first customer research management API. Sessions are server-side and "
+        "role enforcement happens in the API; see /api/v1/session and docs/auth.md."
     ),
     lifespan=lifespan,
 )
 
+# Authentication runs inside CORS so browser clients can read error responses.
+app.add_middleware(AuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-Demo-User-Id"],
     expose_headers=["Content-Disposition", "X-Data-Origin"],
@@ -116,5 +100,5 @@ def root() -> dict:
         "docs": "/docs",
         "health": f"{settings.api_prefix}/health",
         "demo_mode": settings.demo_mode,
-        "data": "synthetic only",
+        "data": "synthetic demonstration data" if settings.demo_mode else "live workspace data",
     }

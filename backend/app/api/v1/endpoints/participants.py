@@ -105,6 +105,8 @@ def create_participant(
         eligibility_note=payload.eligibility_note,
         contact_route=payload.contact_route,
         notes=payload.notes,
+        # A record entered by the team is real customer data, not demo data.
+        is_synthetic=False,
     )
     db.add(participant)
     log_activity(
@@ -113,7 +115,7 @@ def create_participant(
         entity_id=participant.id,
         entity_label=participant.display_name,
         verb="created",
-        summary="Synthetic participant added to the directory. No contact details stored.",
+        summary="Participant added to the directory. No contact details are stored.",
         actor_id=actor.id if actor else None,
     )
     db.commit()

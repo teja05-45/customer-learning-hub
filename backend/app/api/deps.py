@@ -5,25 +5,31 @@ That is a *demonstration* mechanism only: it is not authentication and it grants
 no security. See docs/AUTH.md for the production plan.
 """
 
-from fastapi import Depends, Header, Query
+from fastapi import Depends, Header, Query, Request
 from sqlalchemy.orm import Session
 
+from app.core.auth import resolve_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.errors import NotFoundError
 from app.models import User
 
 
 def get_actor(
+    request: Request,
     x_demo_user_id: str | None = Header(default=None, alias="X-Demo-User-Id"),
     db: Session = Depends(get_db),
 ) -> User | None:
-    if not x_demo_user_id:
-        return db.query(User).filter(User.role == "researcher").first()
-    user = db.get(User, x_demo_user_id)
-    if user is None:
-        raise NotFoundError("Demo user not found. Pick a user from the demonstration entry screen.")
-    return user
+    """The authenticated actor for this request.
+
+    The authentication middleware has already resolved and authorised the
+    request; this dependency reuses its result. The fallback exists for public
+    routes (for example the session directory) and for tests that call the
+    resolver directly. There is no anonymous default user.
+    """
+    user = getattr(request.state, "user", None)
+    if user is not None:
+        return user
+    return resolve_user(db, request)
 
 
 class Pagination:

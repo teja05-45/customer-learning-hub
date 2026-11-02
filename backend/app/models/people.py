@@ -24,10 +24,31 @@ class User(Base, IdMixin, TimestampMixin):
     job_title: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     initials: Mapped[str] = mapped_column(String(4), nullable=False, default="")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Nullable so legacy demo rows and SSO-only users can exist; password login
+    # simply fails for them rather than locking the account model.
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     projects_owned: Mapped[list["ResearchProject"]] = relationship(  # noqa: F821
         back_populates="owner", foreign_keys="ResearchProject.owner_id"
     )
+
+
+class AuthSession(Base):
+    """Server-side session. Only a digest of the cookie token is stored."""
+
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    user_agent: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
 
 
 class Participant(Base, IdMixin, TimestampMixin):

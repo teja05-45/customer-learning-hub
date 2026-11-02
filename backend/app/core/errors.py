@@ -45,3 +45,8 @@ class RuleViolationError(AppError):
 class ForbiddenError(AppError):
     status_code = 403
     code = "forbidden"
+
+
+class UnauthorizedError(AppError):
+    status_code = 401
+    code = "unauthorized"

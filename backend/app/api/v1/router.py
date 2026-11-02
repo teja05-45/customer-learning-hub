@@ -2,9 +2,21 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import actions, decisions, evidence, insights, interviews, participants, projects, recruitment, system
+from app.api.v1.endpoints import (
+    actions,
+    auth,
+    decisions,
+    evidence,
+    insights,
+    interviews,
+    participants,
+    projects,
+    recruitment,
+    system,
+)
 
 api_router = APIRouter()
+api_router.include_router(auth.router)
 api_router.include_router(system.router)
 api_router.include_router(projects.router)
 api_router.include_router(participants.router)

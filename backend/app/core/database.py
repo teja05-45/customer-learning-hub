@@ -56,7 +56,20 @@ def get_db() -> Iterator[Session]:
 
 
 def init_db() -> None:
-    """Create tables that do not exist yet (used when Alembic is not run)."""
+    """Create tables that do not exist yet (used when Alembic is not run).
+
+    SQLite cannot add a column with create_all, so a small compatibility guard
+    keeps an existing demo volume usable after the auth change. Managed
+    deployments should run Alembic instead.
+    """
     from app import models  # noqa: F401  (register metadata)
 
     Base.metadata.create_all(bind=engine)
+
+    if engine.dialect.name == "sqlite":
+        with engine.begin() as connection:
+            columns = {
+                row[1] for row in connection.exec_driver_sql("PRAGMA table_info(users)")
+            }
+            if "password_hash" not in columns:
+                connection.exec_driver_sql("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)")

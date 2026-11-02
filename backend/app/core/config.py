@@ -26,13 +26,15 @@ class Settings(BaseSettings):
     # Comma separated list of allowed browser origins.
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://localhost:8080"
 
-    # Demo-only. The prototype has no real authentication; see docs/AUTH.md.
-    demo_mode: bool = True
-    seed_on_startup: bool = True
-    seed_demo_data: bool = True
+    # Production: real authentication, empty database on startup.
+    demo_mode: bool = False
+    seed_on_startup: bool = False
+    seed_demo_data: bool = False
 
     log_level: str = "INFO"
     api_prefix: str = "/api/v1"
+    # Set true only when served over HTTPS; Docker's local stack is HTTP.
+    cookie_secure: bool = False
 
     @property
     def cors_origin_list(self) -> list[str]:

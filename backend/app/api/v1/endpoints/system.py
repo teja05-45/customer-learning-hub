@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_actor
 from app.core.config import settings as app_settings
 from app.core.database import get_db
-from app.core.errors import RuleViolationError
+from app.core.errors import RuleViolationError, UnauthorizedError
 from app.models import (
     BusinessAction,
     Decision,
@@ -115,9 +115,9 @@ def get_session(
         current_user=current,
         users=demo_users,
         notice=(
-            "Demonstration entry only. Role switching is a UI convenience for reviewers and is not "
-            "authentication, authorisation or a security boundary. Every request to this API is served with the "
-            "same permissions regardless of the selected role."
+            "Demonstration entry is enabled. Choosing a role signs in as that synthetic user and issues a real "
+            "server-side session, and the API enforces the signed-in role on every write. The role picker is a "
+            "demo shortcut, not a replacement for an identity provider, and it disappears when demo mode is off."
         ),
     )
 
@@ -242,34 +242,69 @@ def _csv_safe(value):
     return value
 
 
+def _csv_value(row, field: str):  # noqa: ANN001 - SQLAlchemy row of mixed types
+    value = getattr(row, field, "")
+    if isinstance(value, datetime):
+        value = value.isoformat()
+    elif value is not None and not isinstance(value, (str, int, float, bool)):
+        value = value.isoformat() if hasattr(value, "isoformat") else str(value)
+    return _csv_safe(value)
+
+
 @router.get("/exports/{entity}.csv", tags=["exports"])
-def export_csv(entity: str, db: Session = Depends(get_db)) -> Response:
+def export_csv(entity: str, db: Session = Depends(get_db), actor: User | None = Depends(get_actor)) -> Response:
+    """Download one entity as CSV.
+
+    Reads use ordinary session authentication: any active member of the
+    workspace may export records they can already see. Every download is
+    written to the audit trail, sensitive columns are excluded by construction
+    (the export specs list only approved fields), and an empty dataset returns a
+    header-only file rather than an error.
+    """
     if entity not in EXPORT_SPECS:
         raise RuleViolationError(
             "Unknown export.", details={"available": sorted(EXPORT_SPECS.keys())}
         )
+    if actor is None or not actor.is_active:
+        # Defence in depth: the middleware already rejects anonymous requests.
+        raise UnauthorizedError("Sign in to export records.")
+
     model, fields = EXPORT_SPECS[entity]
     rows = db.execute(select(model)).scalars().all()
+    origin = "synthetic" if app_settings.demo_mode else "live"
 
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow([*fields, "is_synthetic", "exported_at"])
+    writer.writerow([*fields, "data_origin", "exported_at"])
     timestamp = datetime.now(timezone.utc).isoformat()
     for row in rows:
-        values = []
-        for field in fields:
-            value = getattr(row, field, "")
-            if isinstance(value, datetime):
-                value = value.isoformat()
-            values.append(_csv_safe(value))
-        writer.writerow([*values, "true", timestamp])
+        writer.writerow([*(_csv_value(row, field) for field in fields), origin, timestamp])
 
+    log_activity(
+        db,
+        entity_type="export",
+        entity_id=None,
+        entity_label=f"{entity} CSV",
+        verb="exported",
+        summary=f"{actor.name} exported {len(rows)} {entity} record(s) as CSV.",
+        actor_id=actor.id,
+    )
+    db.commit()
+
+    filename = f"everyday-goods-{entity}-{origin}.csv"
     return Response(
-        content=buffer.getvalue(),
-        media_type="text/csv",
+        # The UTF-8 BOM keeps accented names and non-Latin quotes readable in
+        # Excel, which otherwise guesses the encoding and mangles them.
+        content="\ufeff" + buffer.getvalue(),
+        media_type="text/csv; charset=utf-8",
         headers={
-            "Content-Disposition": f'attachment; filename="everyday-goods-{entity}-synthetic.csv"',
-            "X-Data-Origin": "synthetic-demo-data",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Type": "text/csv; charset=utf-8",
+            "X-Data-Origin": (
+                "synthetic-demo-data" if origin == "synthetic" else "live-production-data"
+            ),
+            "X-Row-Count": str(len(rows)),
+            "Cache-Control": "no-store",
         },
     )
 
