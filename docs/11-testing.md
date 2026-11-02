@@ -1,5 +1,10 @@
 # Testing
 
+> **Status (2 November 2026).** This document is retained as the original discovery record.
+> Password authentication, server-side sessions and API-enforced roles are now implemented;
+> statements below that the API has no authentication, or that `X-Demo-User-Id` grants
+> identity, no longer describe the code. See [auth.md](auth.md) and [security.md](security.md).
+
 Two layers, both runnable in under a minute: a pytest suite for API behaviour and a Playwright
 suite for the real interface against a real backend. There is no mocking layer anywhere, so a
 broken contract fails a test instead of hiding behind a stub.

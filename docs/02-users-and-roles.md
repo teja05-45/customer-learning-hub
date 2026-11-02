@@ -1,5 +1,10 @@
 # Users and roles
 
+> **Status (2 November 2026).** This document is retained as the original discovery record.
+> Password authentication, server-side sessions and API-enforced roles are now implemented;
+> statements below that the API has no authentication, or that `X-Demo-User-Id` grants
+> identity, no longer describe the code. See [auth.md](auth.md) and [security.md](security.md).
+
 The prototype seeds seven fictional people across five roles. They are switchable from the
 demonstration entry screen — one click, no password. That switch is a **UI convenience, not
 authentication**: every API request is served with the same permissions regardless of who is

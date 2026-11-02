@@ -1,5 +1,10 @@
 # Data model
 
+> **Status (2 November 2026).** This document is retained as the original discovery record.
+> Password authentication, server-side sessions and API-enforced roles are now implemented;
+> statements below that the API has no authentication, or that `X-Demo-User-Id` grants
+> identity, no longer describe the code. See [auth.md](auth.md) and [security.md](security.md).
+
 17 tables, all with string UUID primary keys and timezone-aware timestamps. Enums are stored
 as strings so adding a value never requires a destructive migration and the same schema works
 on SQLite and PostgreSQL.

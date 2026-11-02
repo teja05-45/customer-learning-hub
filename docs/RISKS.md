@@ -4,7 +4,7 @@
 | --- | --- | --- | --- | --- | --- |
 | R1 | Synthetic data is mistaken for real research | Medium | High | Persistent demo banner, `is_synthetic` on every record and export, documentation, demo script language | FDE |
 | R2 | A small sample is presented as representative | Medium | High | No representativeness metric; sample warnings on recruitment and insight views; validation labelled internal only | Research lead |
-| R3 | No authentication; prototype exposed publicly | Medium | High | Documented as demo-only; basic auth at proxy if hosted; authentication is P0 | Customer admin |
+| R3 | Session or credential weakness (no SSO, no rate limiting, no CSRF token) | Medium | Medium | Password sessions and role enforcement are implemented; add rate limiting, TLS and a CSRF token before exposing writes publicly | Customer admin |
 | R4 | Contradictory evidence deleted to simplify a story | Medium | High | Explicit warnings, confirmation dialog, evidence counts drop visibly, operations guidance | Research lead |
 | R5 | Unattributed note treated as verified evidence | Low | High | Missing provenance forces flagged status and low confidence; provenance warning everywhere | FDE |
 | R6 | Dashboard and analytics drift apart | Medium | Medium | Shared service functions; `test_metrics.py` asserts agreement | FDE |

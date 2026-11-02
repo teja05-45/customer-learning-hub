@@ -79,12 +79,14 @@ Status is based on executed checks. "Verified" names the test or manual check us
 | # | Criterion | Status | Evidence |
 | --- | --- | --- | --- |
 | G1 | No contact fields accepted or stored | Pass | Data-minimisation test |
-| G2 | Demo role entry is labelled as non-authentication | Pass | Session notice test |
+| G2 | Demo entry is refused outside demo mode and issues a real session inside it | Pass | `test_demo_entry_requires_demo_mode` |
 | G3 | CSV exports are labelled synthetic and formula-safe | Pass | Export test; `_csv_safe` |
 | G4 | No secrets or `.env` in the image or repository | Pass | `.dockerignore`; `.gitignore` |
-| G5 | Backend tests pass | Pass | 46 passed |
+| G5 | Backend tests pass | Pass | 69 passed (`pytest -q`, 2 Nov 2026) |
 | G6 | Frontend typecheck and build pass | Pass | `tsc --noEmit`, `vite build` |
 | G7 | Browser journey and accessibility checks pass | Pass | 7 Playwright tests |
-| G8 | Docker Compose starts and both services are healthy | Pass | Compose verification |
+| G8 | Docker Compose starts and both services are healthy | Not re-verified | Docker daemon unavailable in this environment; see `deployment.md` |
 | G9 | Documentation matches implementation | Pass | This documentation set |
-| G10 | Production authentication implemented | **Not met — documented gap** | `AUTH.md`, `SECURITY.md` |
+| G10 | Password authentication, server-side sessions and role enforcement | Pass | `test_auth.py` (9 tests); `auth.md` |
+| G11 | Only a non-administrator role can reproduce the "Export failed" defect | Pass | `test_exports.py::test_a_researcher_can_export` |
+| G12 | Every CSV export downloads with correct headers | Pass | `test_exports.py` (8 parameterised cases) |

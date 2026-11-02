@@ -1,5 +1,10 @@
 # Limitations and next steps
 
+> **Status (2 November 2026).** This document is retained as the original discovery record.
+> Password authentication, server-side sessions and API-enforced roles are now implemented;
+> statements below that the API has no authentication, or that `X-Demo-User-Id` grants
+> identity, no longer describe the code. See [auth.md](auth.md) and [security.md](security.md).
+
 Ordered by risk, not by excitement. Each item names what is missing, what it would cost, and
 what it would change.
 

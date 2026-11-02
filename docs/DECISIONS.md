@@ -88,3 +88,22 @@ changeable in one place (`REUSE_WINDOW_DAYS`).
 **Context:** 8080 is commonly occupied on developer machines.
 **Decision:** Container listens on 8080; host mapping is 8081.
 **Consequence:** Documentation and Compose must agree; one line to change.
+
+## ADR-013 — Sessions use an HTTP-only cookie, not a token in JavaScript
+
+**Context:** A research workspace holds customer quotes and free-text notes. Storing a bearer
+token in `localStorage` makes any XSS a full account takeover.
+**Decision:** Issue a random 256-bit token in an HTTP-only, `SameSite=Lax` cookie; persist only
+its SHA-256 digest server-side with an 8-hour absolute expiry.
+**Consequence:** The browser cannot read the credential, logout is a server-side delete, and a
+password change revokes every other session. Same-origin deployment is required, and CSRF
+protection beyond `SameSite` still needs a token.
+
+## ADR-014 — Exports are reads, not an administrator privilege
+
+**Context:** Restricting CSV downloads to `admin` broke the demo for every reviewer and produced
+the reported "Export failed".
+**Decision:** Any authenticated member may export records they can already read; the endpoint
+re-checks the actor, excludes sensitive columns by construction, and writes an audit row.
+**Consequence:** The permission model matches the read model. Organisation-wide export is still
+visible in the audit trail, so bulk extraction is attributable.

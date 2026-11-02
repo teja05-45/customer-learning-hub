@@ -4,8 +4,10 @@ An evidence-first customer research workspace. Plan a study, recruit synthetic p
 run the conversation, capture what customers actually said, turn it into a reviewed insight,
 and connect that insight to a business decision with a named owner and a due date.
 
-**All data is synthetic.** No real customer was contacted, no Everyday Goods system is
-connected, no audio is recorded and no contact details are stored.
+The demo deployment is seeded with **synthetic data only**; seeding is off by default, so a
+production instance starts empty and is claimed by its first administrator. No real customer is
+contacted, no Everyday Goods system is connected, no audio is recorded and no contact details
+are stored.
 
 ![Overview dashboard](docs/screenshots/02-overview.png)
 
@@ -103,9 +105,11 @@ seed is idempotent: it is skipped when users already exist.
 | Overview | Derived metrics, segment coverage, timeline, outstanding follow-ups, activity trail |
 | Analytics | Basis-labelled metrics, reuse detail, unresolved questions, measurement gaps |
 | Search | Deterministic search across seven entity types, with related-research suggestions |
-| Exports | CSV per entity, labelled synthetic and formula-injection safe |
+| Exports | Eight CSV entities with correct headers, Unicode, formula-injection safety, audit logging and empty-dataset handling |
 | Settings | Organisation name, research lead, recording default, retention months, demo reset |
-| Demo entry | Role picker and banner — explicitly **not** authentication |
+| Authentication | Email + password, PBKDF2 hashing, server-side sessions in an HTTP-only cookie, sign-out, password change |
+| Authorisation | API-enforced roles on every write; the browser cannot assert a role |
+| Demo entry | Role picker that issues a real session, available only while demo mode is enabled |
 
 ## Architecture
 
@@ -136,7 +140,7 @@ backend/
   app/schemas/            Pydantic contracts
   app/seed/               synthetic demo dataset
   alembic/                migration environment and initial revision
-  tests/                  46 pytest tests
+  tests/                  69 pytest tests, including auth and export suites
 frontend/
   src/pages/              one component per screen
   src/components/         shared UI, evidence card, search, dialogs
@@ -152,7 +156,7 @@ These commands were executed for this release:
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest -q                 # 46 passed
+.venv\Scripts\python.exe -m pytest -q                 # 69 passed
 
 cd ..\frontend
 npm run typecheck                                     # clean
@@ -175,8 +179,9 @@ cd frontend; npx playwright test
 - Synthetic data only; participant contact fields are not accepted by the schema.
 - Recording is disabled by default and cannot be enabled without recorded consent. No audio is
   captured.
-- **No authentication or authorisation.** The role picker is a demo convenience. This is the
-  first production prerequisite; see `docs/AUTH.md`.
+- **Authentication exists; SSO does not.** Sessions are server-side and roles are enforced by the
+  API. There is no identity provider, no email-based password reset and no rate limiting yet; see
+  `docs/auth.md`.
 - SQLite is single-writer; PostgreSQL is the deployment path.
 - Some list screens load all rows rather than paginating.
 - Evidence deletion is permanent in this prototype (no tombstone).
@@ -188,25 +193,28 @@ Full lists: `docs/RISKS.md`, `docs/DEFECT_REGISTER.md`, `docs/TASKS.md`.
 
 | Document | Contents |
 | --- | --- |
-| `docs/PRD.md` | Problem, users, requirements, non-goals |
-| `docs/ARCHITECTURE.md` | Modules, boundaries, cross-cutting choices |
-| `docs/HLD.md` / `docs/LLD.md` | System design and implementation detail |
-| `docs/TECH_STACK.md` | Pinned versions and deliberate omissions |
-| `docs/DESIGN.md` | Palette, components, required states, accessibility |
-| `docs/DATABASE.md` | Tables, relationships, constraints, migrations |
-| `docs/API.md` | Endpoint reference, vocabularies, examples |
-| `docs/AUTH.md` | Demo identity and the production path |
-| `docs/SECURITY.md` | Minimisation, consent, validation, threats |
-| `docs/TESTING.md` | Suites, commands, actual results, gaps |
-| `docs/DEPLOYMENT.md` | Docker, Windows, migrations, troubleshooting |
-| `docs/OPERATIONS.md` | Runbook, backup, incidents, rollback |
-| `docs/IMPLEMENTATION_PLAN.md` | Three-week FDE plan with dependencies and risks |
-| `docs/TASKS.md` / `docs/ROADMAP.md` | Delivered work and what comes next |
-| `docs/ACCEPTANCE_CRITERIA.md` | Every criterion with verification status |
-| `docs/DEFECT_REGISTER.md` | Confirmed defects, gaps, non-reproduced reports |
-| `docs/DECISIONS.md` / `docs/RISKS.md` | ADRs and risk register |
-| `docs/CHANGELOG.md` | What changed in this hardening release |
-| `docs/STAGE_COMPLETION_REPORT.md` | Delivery report and final results |
+| `docs/prd.md` | Problem, users, requirements, non-goals |
+| `docs/architecture.md` | Modules, boundaries, cross-cutting choices |
+| `docs/hld.md` / `docs/lld.md` | System design and implementation detail |
+| `docs/tech_stack.md` | Pinned versions and deliberate omissions |
+| `docs/design.md` | Palette, components, required states, accessibility |
+| `docs/database.md` / `docs/data_dictionary.md` | Tables, constraints, migrations, generated column reference |
+| `docs/api.md` | Endpoint reference, auth requirements, vocabularies |
+| `docs/auth.md` | Password sessions, role matrix, known gaps |
+| `docs/security.md` | Minimisation, consent, validation, threats |
+| `docs/testing.md` | Suites, commands, actual results, gaps |
+| `docs/deployment.md` | Docker, Windows, migrations, troubleshooting |
+| `docs/backup_recovery.md` / `docs/operations.md` | Verified backup procedure, runbook, incidents |
+| `docs/performance.md` | Measured latency and scaling characteristics |
+| `docs/accessibility.md` / `docs/troubleshooting.md` | A11y behaviour and real failure modes |
+| `docs/integration.md` | Integration status and the contract for adding one |
+| `docs/implementation_plan.md` | Delivery plan with dependencies and risks |
+| `docs/tasks.md` / `docs/roadmap.md` | Delivered work and what comes next |
+| `docs/acceptance_criteria.md` / `docs/requirements_traceability.md` | Verified criteria and requirement mapping |
+| `docs/DEFECT_REGISTER.md` | Confirmed defects and gaps |
+| `docs/decisions.md` / `docs/risks.md` | ADRs and risk register |
+| `docs/changelog.md` | What changed in each release |
+| `docs/git_commit_plan.md` | Intended units and commit rules |
 
 The original discovery documents (`docs/01-…` to `docs/20-…`) are retained; `docs/README.md`
 maps both sets.

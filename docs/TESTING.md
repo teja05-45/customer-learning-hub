@@ -5,73 +5,90 @@ database; services are not mocked.
 
 ## How to run
 
-```powershell
-# Backend (from backend/, with the virtual environment created)
-.venv\Scripts\python.exe -m pytest -q
-.venv\Scripts\python.exe -m pytest --cov=app --cov-report=term-missing
+```bash
+# Backend (from backend/)
+python -m pytest -q
 
 # Frontend (from frontend/)
 npm run typecheck
 npm run build
 npx playwright test
-
-# Playwright against the Docker build
-$env:E2E_BASE_URL="http://localhost:8081"; npx playwright test
 ```
 
 The Playwright suite expects the API at `http://127.0.0.1:8000/api/v1` (override with
-`E2E_API_URL`) and the web app at `http://localhost:5173` by default.
+`E2E_API_URL`) and the web app at `http://localhost:5173`, or `E2E_BASE_URL` for the Docker build.
 
 ## Backend suites
 
 | File | Coverage |
 | --- | --- |
-| `tests/test_api.py` | Health, derived dashboard numbers, project CRUD/validation, 404 envelope, participant data minimisation, recruitment transitions, consent gate, evidence provenance, insight validation, decisions, actions, search, analytics labels, CSV export, demo reset, demo session |
+| `tests/test_api.py` | Health, derived dashboard numbers, project CRUD/validation, 404 envelope, participant data minimisation, recruitment transitions, consent gate, evidence provenance, insight validation, decisions, actions, search, analytics labels, CSV export, demo reset, demo directory |
+| `tests/test_auth.py` | Anonymous requests rejected, password login/logout, cookie flags, role enforcement on writes, demo entry gated by demo mode, client-supplied identity header ignored, first-run registration, password change revoking other sessions |
+| `tests/test_exports.py` | All eight CSV exports, non-administrator export (the "Export failed" regression), anonymous rejection, sensitive-column exclusion, Unicode, header-only empty dataset, audit entry, unknown-entity error |
 | `tests/test_workflow.py` | Question → project → participant → recruitment → interview → evidence → insight → decision → action → find it again |
-| `tests/test_journey.py` | The full 22-step journey with four segments, contradictions, validation, decision limits, action lifecycle, metric agreement, search navigation and cross-project rejection |
+| `tests/test_journey.py` | The full journey with four segments, contradictions, validation, decision limits, action lifecycle, metric agreement, search navigation and cross-project rejection |
 | `tests/test_metrics.py` | Dashboard/analytics agreement, counter movement on new records, overdue lifecycle, reuse definition, segment totals reconciling with the directory |
 | `tests/test_pipeline.py` | Contacted/response-rate definitions, distinct-participant counting, interview-driven history events, stage-count/filter agreement, coverage derivation |
-| `tests/test_integrity.py` | Database constraints, link uniqueness, sufficiency recomputation, archive behaviour |
+| `tests/test_integrity.py` | Formula-injection neutralisation, settings persistence, link uniqueness, sufficiency recomputation, unlink audit trail |
 | `tests/test_seed.py` | Demo reset repeatability, unique generated codes, synthetic labelling, provenance mix |
 
-Final verified result: **46 passed** (`pytest -q`, one third-party Starlette deprecation
-warning, no failures).
+## Actual results
+
+Executed on 2 November 2026 against the working tree of this release:
+
+```
+cd backend && python -m pytest -q
+69 passed, 1 warning in 67.53s
+```
+
+The warning is a third-party Starlette/anyio deprecation notice, not a project failure.
+
+```
+cd frontend && npm run typecheck     # exit 0, no output
+cd frontend && npm run build         # exit 0, built in 9.74s
+```
+
+`vite build` reports one chunk-size advisory (single ~1 MB bundle). Code-splitting is a listed
+improvement, not a failure.
+
+### Test isolation
+
+`tests/conftest.py` points `DATABASE_URL` at a temporary SQLite file created with
+`tempfile.mkdtemp` and rebuilds the synthetic dataset with `seed_demo_data(reset=True)` for each
+test that needs it. Nothing is written to `backend/data/clh.db`, and every participant the seed
+creates carries `is_synthetic = true`. Participants created through the API are marked
+`is_synthetic = false`, because the API path represents real records.
+
+Authentication is exercised through the real login endpoint, so the tests also verify that the
+cookie round-trips through Starlette's `TestClient`.
 
 ## Frontend verification
 
 - `tsc --noEmit` — clean.
-- `vite build` — succeeds; one chunk-size advisory (single bundle ~988 kB, ~270 kB gzip).
-  Code-splitting is a listed improvement, not a failure.
-- Playwright:
-  - `smoke.spec.ts` — every primary screen renders with real data, no console errors, deep
-    links, unknown route, API failure state, keyboard skip link, command-palette focus trap.
-  - `a11y.spec.ts` — axe scan of every primary screen and the palette; fails on serious or
-    critical WCAG 2.1 A/AA violations.
-  - `journey.spec.ts` — executes the full research-to-decision workflow and verifies it in the
-    UI, including insight editing, evidence review/provenance correction and search navigation.
-  - `screenshots.spec.ts` — captures documentation screenshots.
+- `vite build` — succeeds with one chunk-size advisory.
+- Playwright specs: `smoke.spec.ts` (primary screens, deep links, unknown route, API failure
+  state, skip link, command palette), `a11y.spec.ts` (axe scan of every screen), `journey.spec.ts`
+  (research-to-decision workflow), `screenshots.spec.ts` (documentation captures).
 
-Final verified result: **7 passed** (`npx playwright test`).
+The Playwright suite was **not executed in this session**: the browser run needs both servers and
+the Docker daemon was unavailable in this environment. The last recorded result in the repository
+is 7 passing tests (`docs/STAGE_COMPLETION_REPORT.md`), and the specs were updated for cookie
+sessions. Treat the browser suite as unverified for this revision until it is run.
 
 ## What is deliberately not covered
 
-- No component-level unit tests (the browser suite covers navigation, forms, filters, modals,
-  loading, empty and error states).
-- No load or performance testing; volumes are prototype-scale.
-- No penetration testing; there is no authentication to test.
-- No automated visual-regression snapshots; screenshots are for documentation.
-
-## Test data policy
-
-Every fixture is synthetic. The demo reset endpoint restores a known dataset, so a Playwright
-run does not depend on previous state. Backend tests share a session-scoped database by design
-and use before/after deltas where order could matter; the dedicated journey test resets first.
+- No component-level unit tests; the browser suite covers navigation, forms, filters, modals and
+  states.
+- No load or performance testing; volumes are prototype-scale. `docs/performance.md` records the
+  one measurement that was taken and how.
+- No penetration testing. Authentication tests cover the enforcement path, not exploitation.
+- No visual-regression snapshots.
 
 ## Failure triage
 
 1. Re-run the failing test alone to distinguish state leakage from a real defect.
-2. Inspect the API response and the request id in the server log.
-3. For Playwright, open the retained trace: `npx playwright show-trace <trace.zip>`.
-4. Fix the cause; do not relax assertions or skip tests.
-
-See `11-testing.md` for the original strategy discussion.
+2. Inspect the API response and the server log.
+3. If a session-related test fails with 401, check whether the test reset the dataset after
+   signing in — a reset replaces every user, so the cookie is intentionally dead.
+4. For Playwright, open the retained trace: `npx playwright show-trace <trace.zip>`.
+5. Fix the cause; do not relax assertions or skip tests.

@@ -1,102 +1,84 @@
-# Authentication: what exists, and what it would take
+# Authentication and Authorisation
 
-## Short version
+Status: **implemented**. The earlier prototype trusted a client-supplied user id. That is gone:
+identity now comes from a server-side session referenced by an HTTP-only cookie, and the API
+checks the signed-in user's role on every write.
 
-**There is no authentication in this prototype.** What looks like a login is a role picker
-that writes a user id to `localStorage`. Every API endpoint is served to anyone who can reach
-it, with full permissions. This document exists so that nobody mistakes the demonstration for
-security, and so the real implementation has a plan.
+## Model
 
-## What actually happens
+| Concern | Implementation |
+| --- | --- |
+| Credential | Email + password |
+| Password storage | PBKDF2-HMAC-SHA256, 260,000 iterations, 16-byte random salt (`app/core/security.py`) |
+| Session | Random 32-byte token in the `clh_session` cookie; only its SHA-256 digest is stored |
+| Cookie flags | `HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` when `COOKIE_SECURE=true` |
+| Lifetime | 8 hours; `last_seen_at` is refreshed on use, `expires_at` is absolute |
+| Revocation | Logout deletes the row; changing a password deletes every other session for that user |
+| Transport | Same-origin `/api` behind nginx in the Docker build; Vite proxy locally |
 
-1. `GET /api/v1/session` returns the seven seeded people and a `notice` field stating this is a
-   demonstration.
-2. The entry screen renders one button per person. Clicking one calls
-   `setDemoUserId(id)` → `localStorage.clh.demoUserId`.
-3. `api.ts` attaches `X-Demo-User-Id: <id>` to requests.
-4. `get_actor()` in `backend/app/api/deps.py` looks that id up and returns the `User`, **or
-   returns `None`** if the header is missing or unknown.
-5. The actor is used for one thing: writing `actor_id` on activity-log rows and
-   `captured_by_id` / `updated_by_id` fields.
+The browser never stores a user id, token or role in `localStorage`. `GET /auth/me` is the only
+source of identity in the UI, and it is answered from the cookie.
 
-Nothing is filtered by role. No endpoint returns 403. Sending no header at all works. Sending
-another person's id attributes your action to them.
+## Endpoints
 
-## Why it is built this way
+| Method | Path | Auth required | Purpose |
+| --- | --- | --- | --- |
+| POST | `/auth/register` | No, only while zero users exist | Claim an empty workspace; the first account becomes `admin` |
+| POST | `/auth/login` | No | Email + password → session cookie |
+| POST | `/auth/logout` | No (idempotent) | Delete the session row and the cookie |
+| GET | `/auth/me` | Session | The signed-in user |
+| POST | `/auth/password` | Session | Change own password, revoke other sessions |
+| POST | `/auth/demo` | No, **only when `DEMO_MODE=true`** | Demonstration entry: issue a session for a seeded synthetic user |
 
-A three-week prototype that needed real auth would have spent its budget on password resets
-and session tables instead of on the research workflow, which is the thing being evaluated.
-Faking auth — a "login" that accepts any password, or a role check enforced only in the UI —
-would have been worse: reviewers would assume protection that does not exist.
+`POST /auth/register` is public only because a fresh database has no administrator; it refuses
+with `403 registration_closed` as soon as one user exists. Further accounts are an administrator
+task in this release (see "Known gaps").
 
-So the choice was to make the absence explicit in four places: the entry screen, the API
-description, this document, and the security document. The test
-`test_session_is_labelled_as_demo_not_authentication` fails if the label is ever removed.
+## Enforcement
 
-## What production would need
+`app/core/auth.py` installs `AuthMiddleware`, which runs before every `/api/v1` route:
 
-### Identity
+1. Public paths (`health`, `session`, `auth/*`) pass through.
+2. Every other route resolves the cookie to an active user; otherwise `401 unauthorized`.
+3. For non-`GET` requests, the path selects an allowed role set; otherwise `403 forbidden`.
 
-- **Email + password** for a ten-person internal tool, or **SSO** (Google Workspace / Microsoft
-  Entra) if Everyday Goods already has one. SSO is the better default: no password storage, no
-  reset flow, and joiner/leaver handling comes from the directory.
-- Sessions: HTTP-only, `Secure`, `SameSite=Lax` cookies with server-side sessions, not JWTs in
-  `localStorage` — a research tool holds customer quotes, and a token readable by JavaScript
-  is one XSS away from exfiltration.
-- Short idle timeout (8 hours) and a 30-day absolute limit.
+Covering all routes by default means a newly added endpoint is protected unless it is explicitly
+listed as public — the safe failure mode.
 
-### Authorisation
+| Role | Write access |
+| --- | --- |
+| `researcher` | Projects, participants, recruitment, interviews, evidence, insights; decisions and actions |
+| `admin` | Everything above, plus settings, demo reset and user administration |
+| `business_owner`, `ceo` | Decisions and actions (plus all reads) |
+| `cx` | No writes through this API; read access for coordination |
 
-Roles already exist as data (`ceo`, `researcher`, `business_owner`, `cx`, `admin`). The
-minimal policy that matches how the team works:
+Exports are reads: any active member may download records they can already see. The endpoint
+still re-checks the actor, and every download is written to the audit trail.
 
-| Capability | researcher | business_owner | cx | ceo | admin |
-| --- | --- | --- | --- | --- | --- |
-| Read projects, insights, decisions | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Create/edit projects, interviews, evidence | ✓ | — | — | — | — |
-| Validate an insight | ✓ | — | — | — | — |
-| Create a decision | ✓ | ✓ | ✓ | ✓ | — |
-| Change organisation settings, reset demo | — | — | — | — | ✓ |
-| Export CSVs | ✓ | ✓ | ✓ | ✓ | ✓ |
-| See participant records | ✓ | limited (no notes) | limited | aggregate only | ✓ |
+## Why cookie sessions rather than tokens in JavaScript
 
-Enforcement belongs in a FastAPI dependency per router (`require_role(...)`), not in the React
-app. The UI may hide what a role cannot do, but the API must refuse it independently.
+A research workspace holds customer quotes. A bearer token readable by JavaScript is one XSS
+away from exfiltration; an `HttpOnly` cookie is not readable by scripts. Same-origin delivery
+keeps the configuration simple, and `SameSite=Lax` blocks cross-site form submissions.
 
-### Things this data model makes easy, and hard
+## Known gaps
 
-- **Easy:** every mutation already records an actor, so an audit trail exists the moment actors
-  are real.
-- **Easy:** there is no contact data to protect, which removes the hardest part of the privacy
-  surface.
-- **Hard:** four tables denormalise `project_id` for filtering (evidence, insights, decisions,
-  actions). Row-level authorisation ("only project members see this project") would need a
-  membership table and a check on every one of those paths. For ten people, workspace-wide read
-  access is simpler and honest.
+- **No SSO / identity provider.** Email + password only. An OIDC provider is the natural next
+  step; the `password_hash` column is nullable so SSO-only users can exist.
+- **No email-based password reset.** A user who forgets a password needs an administrator. The
+  self-service change flow requires the current password.
+- **No account/invitation management UI.** User rows are created by the seed (demo) or the
+  first-run registration; additional accounts are a documented administrator task.
+- **Single organisation.** `OrganizationSetting` is a singleton and every record belongs to it,
+  so cross-organisation isolation cannot be violated — but multi-tenancy is not implemented.
+- **No CSRF token.** `SameSite=Lax` plus a JSON-only API (no form posts, no `text/plain`
+  accepted) mitigates the classic CSRF vectors; a token is still required before exposing
+  cookie-authenticated writes to untrusted origins.
+- **No rate limiting or lockout** on the login endpoint.
 
-### Migration path
+## Tests
 
-1. Add `auth_users` (or extend `users`) with `external_id`, `password_hash` (nullable when SSO),
-   `last_login_at`, `failed_attempts`.
-2. Add `sessions` (id, user_id, issued_at, expires_at, ip, user_agent) and cookie middleware.
-3. Replace `get_actor()` with `get_current_user()` that raises 401 when there is no session,
-   and keep an `X-Demo-User-Id` path only when `DEMO_MODE=true` and `ENVIRONMENT != production`.
-4. Add `require_role()` to mutating routers.
-5. Delete the role picker from the UI; keep a "signed in as" menu with real sign-out.
-6. Add CSRF protection for cookie-authenticated mutations.
-7. Add tests: 401 without a session, 403 for a role that may not validate, 200 for one that may.
-
-Steps 3–5 are one sprint for one developer; steps 1–2 are a day with an identity provider that
-already exists.
-
-## Interim mitigations for a hosted demo
-
-If this prototype is put on a public URL before auth exists:
-
-- Put it behind HTTP basic auth at the proxy (nginx `auth_basic`) — crude, but it stops casual
-  access.
-- Set `DEMO_MODE=false` and `SEED_DEMO_DATA=false` on any instance that should not create
-  data.
-- Keep the database non-persistent, so a reset is free.
-- Do not put real customer notes in it. The schema has no contact fields, but the free-text
-  fields will happily accept anything typed into them.
+`backend/tests/test_auth.py` covers: anonymous rejection on data routes, password login and
+logout, cookie flags, role enforcement (researcher allowed, owner limited, CX read-only),
+demonstration entry disabled outside demo mode, client-supplied header rejected, first-run
+registration and its closure, and password change revoking other sessions.
