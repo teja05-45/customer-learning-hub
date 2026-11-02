@@ -16,6 +16,7 @@ class AppError(Exception):
         super().__init__(message)
         self.message = message
         self.details = details
+        self.headers: dict[str, str] | None = None
         if code:
             self.code = code
 
@@ -50,3 +51,15 @@ class ForbiddenError(AppError):
 class UnauthorizedError(AppError):
     status_code = 401
     code = "unauthorized"
+
+
+class RateLimitedError(AppError):
+    """Too many attempts. ``Retry-After`` tells the client when to come back."""
+
+    status_code = 429
+    code = "rate_limited"
+
+    def __init__(self, message: str, retry_after: int) -> None:
+        super().__init__(message, details={"retry_after_seconds": retry_after})
+        self.retry_after = retry_after
+        self.headers = {"Retry-After": str(retry_after)}

@@ -37,6 +37,8 @@ PUBLIC_PATHS = {
 RESEARCH_WRITE_ROLES = {"researcher", "admin"}
 BUSINESS_WRITE_ROLES = {"researcher", "business_owner", "ceo", "admin"}
 ADMIN_ROLES = {"admin", "researcher"}
+USER_ADMIN_ROLES = {"admin"}
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
 def resolve_user(db, request: Request) -> User | None:
@@ -69,9 +71,13 @@ def resolve_user(db, request: Request) -> User | None:
 
 def roles_for_write(method: str, path: str) -> set[str] | None:
     """Return the roles allowed to perform this write, or None for reads."""
-    if method in ("GET", "HEAD", "OPTIONS"):
+    if method in SAFE_METHODS:
         return None
     relative = path.removeprefix(settings.api_prefix)
+    if relative.startswith("/users"):
+        # Account administration is the administrator's job alone; a researcher
+        # must not be able to mint an account or change a role.
+        return USER_ADMIN_ROLES
     if relative.startswith(("/demo", "/settings")):
         return ADMIN_ROLES
     if relative.startswith(
@@ -87,11 +93,49 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"error": {"code": code, "message": message, "details": None}})
 
 
+def _allowed_origins(request: Request) -> set[str]:
+    allowed = {origin.rstrip("/") for origin in settings.cors_origin_list}
+    host = request.headers.get("host")
+    if host:
+        # Same-origin deployments (the Compose stack serves the app and /api from
+        # one host) are allowed without listing themselves in CORS_ORIGINS.
+        allowed.add(f"{request.url.scheme}://{host}".rstrip("/"))
+    return allowed
+
+
+def origin_is_trusted(request: Request) -> bool:
+    """CSRF defence for state-changing requests.
+
+    A cookie-authenticated write is only cross-site forgeable if the browser
+    tells us it came from somewhere else, and modern browsers always send
+    ``Origin`` on unsafe methods. Requests that carry an ``Origin`` or
+    ``Referer`` outside the configured list are refused; requests with neither
+    header are non-browser clients (curl, the test suite, server-to-server),
+    which cannot be tricked into riding a user's cookie.
+    """
+    allowed = _allowed_origins(request)
+    for header in ("origin", "referer"):
+        value = (request.headers.get(header) or "").rstrip("/")
+        if not value:
+            continue
+        if value == "null":
+            return False
+        if not any(value == origin or value.startswith(f"{origin}/") for origin in allowed):
+            return False
+    return True
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         if not path.startswith(settings.api_prefix) or request.method == "OPTIONS":
             return await call_next(request)
+        if request.method not in SAFE_METHODS and not origin_is_trusted(request):
+            return _error(
+                403,
+                "csrf_origin_rejected",
+                "This request came from an origin this API does not trust.",
+            )
         if path in PUBLIC_PATHS:
             return await call_next(request)
 

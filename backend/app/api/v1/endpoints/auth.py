@@ -15,7 +15,14 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.errors import ConflictError, ForbiddenError, NotFoundError, UnauthorizedError
+from app.core.errors import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    RateLimitedError,
+    UnauthorizedError,
+)
+from app.core.ratelimit import FailureLimiter
 from app.core.security import (
     SESSION_COOKIE,
     SESSION_HOURS,
@@ -38,6 +45,22 @@ from app.services.activity import log_activity
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 INVALID_CREDENTIALS = "Email or password is incorrect."
+
+# Failed sign-ins are counted per client address and per account, so neither a
+# single noisy client nor a distributed attack on one account can run unbounded.
+login_limiter = FailureLimiter(settings.login_max_failures, settings.login_window_seconds)
+
+
+def _client_address(request: Request) -> str:
+    if settings.trust_proxy_headers:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip() or "unknown"
+    return request.client.host if request.client else "unknown"
+
+
+def _throttle_keys(request: Request, email: str) -> list[str]:
+    return [f"ip:{_client_address(request)}", f"email:{email}"]
 
 
 def _initials(name: str) -> str:
@@ -168,10 +191,24 @@ def login(
     response: Response,
     db: Session = Depends(get_db),
 ) -> AuthUser:
+    keys = _throttle_keys(request, payload.email)
+    waits = [login_limiter.retry_after(key) for key in keys] if settings.login_max_failures > 0 else []
+    if any(waits):
+        raise RateLimitedError(
+            "Too many failed sign-in attempts. Wait a few minutes, then try again.",
+            retry_after=max(waits),
+        )
+
     user = db.query(User).filter(User.email == payload.email.lower()).one_or_none()
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         # Same message and status for unknown email and wrong password.
+        if settings.login_max_failures > 0:
+            for key in keys:
+                login_limiter.record_failure(key)
         raise UnauthorizedError(INVALID_CREDENTIALS)
+
+    for key in keys:
+        login_limiter.clear(key)
     return _issue_session(db, user, request, response)
 
 

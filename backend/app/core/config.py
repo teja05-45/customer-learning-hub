@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     # Set true only when served over HTTPS; Docker's local stack is HTTP.
     cookie_secure: bool = False
 
+    # Failed sign-ins allowed per window before the caller is throttled. Set to 0
+    # to disable the limiter (not recommended outside a throwaway demo).
+    login_max_failures: int = 8
+    login_window_seconds: int = 300
+    # Trust X-Forwarded-For for the client address. Enable only behind a proxy
+    # that overwrites the header; otherwise a caller can spoof it.
+    trust_proxy_headers: bool = False
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

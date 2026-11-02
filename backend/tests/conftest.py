@@ -42,6 +42,11 @@ def client() -> TestClient:
 
 def reset_dataset() -> None:
     """Rebuild the synthetic dataset in the throwaway test database."""
+    # Failed-sign-in counters are process-wide, so a test that deliberately
+    # exhausts them must not leak the block into the next test.
+    from app.api.v1.endpoints.auth import login_limiter
+
+    login_limiter.reset()
     db = SessionLocal()
     try:
         seed_demo_data(db, reset=True)
