@@ -63,16 +63,16 @@ def list_projects(
         )
 
     stmt = stmt.order_by(ResearchProject.deadline.asc().nulls_last(), ResearchProject.created_at.desc())
-    total = db.execute(select(func.count()).select_from(stmt.order_by(None).subquery())).scalar_one()
-    rows = (
-        db.execute(stmt.offset((pagination.page - 1) * pagination.page_size).limit(pagination.page_size))
-        .scalars()
-        .unique()
-        .all()
-    )
-    items = [project_summary(db, p) for p in rows]
+
+    # business_functions is a JSON list, which is not portably filterable in SQL
+    # across SQLite and PostgreSQL. Filter before paginating so the reported
+    # total matches the rows the caller receives.
+    rows = db.execute(stmt).scalars().unique().all()
     if business_function:
-        items = [i for i in items if business_function in (i.business_functions or [])]
+        rows = [p for p in rows if business_function in (p.business_functions or [])]
+    total = len(rows)
+    offset = (pagination.page - 1) * pagination.page_size
+    items = [project_summary(db, p) for p in rows[offset : offset + pagination.page_size]]
     return ProjectListResponse(
         items=items,
         total=total,
