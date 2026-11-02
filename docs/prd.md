@@ -27,7 +27,7 @@ and reusable.
 | Admin | Keep the workspace healthy | Settings, exports, demo reset, retention configuration |
 
 The prototype uses a demonstration role picker. It is a reviewer convenience, **not**
-authentication or authorisation; see `AUTH.md`.
+authentication or authorisation; see `auth.md`.
 
 ## 3. Core workflow
 
@@ -104,4 +104,4 @@ These are calculated in `backend/app/services/dashboard.py` and
 
 ## 7. Related documents
 
-`01-product-brief.md`, `03-core-workflows.md`, `ACCEPTANCE_CRITERIA.md`, `../README.md`.
+`01-product-brief.md`, `03-core-workflows.md`, `acceptance_criteria.md`, `../README.md`.

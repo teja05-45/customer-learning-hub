@@ -83,7 +83,7 @@ hand.
 say the data is synthetic; every CSV row carries `is_synthetic=true` and `exported_at`.
 
 **Be sceptical of:** a login form. There isn't one, deliberately — see
-[AUTH.md](AUTH.md).
+[auth.md](auth.md).
 
 ---
 

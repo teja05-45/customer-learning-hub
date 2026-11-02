@@ -13,7 +13,7 @@ class User(Base, IdMixin, TimestampMixin):
     """Internal team member.
 
     This is a *demonstration* identity record. It holds no password, hash or
-    session token: the prototype has no authentication (see docs/AUTH.md).
+    session token: the prototype has no authentication (see docs/auth.md).
     """
 
     __tablename__ = "users"

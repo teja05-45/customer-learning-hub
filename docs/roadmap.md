@@ -14,7 +14,7 @@
 ## Next (0–3 months, before any wider rollout)
 
 1. **Authentication and authorisation** — OIDC/SSO, server-side role checks, session cookies.
-   This is the blocker for hosting. See `AUTH.md`.
+   This is the blocker for hosting. See `auth.md`.
 2. **PostgreSQL** — managed instance, Alembic in the deploy pipeline, connection pooling.
 3. **Audit-grade history** — immutable events for evidence deletion, decision changes and
    consent withdrawal; exportable audit view.

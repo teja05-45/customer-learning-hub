@@ -83,7 +83,7 @@ cd backend
 ```
 
 Set `DATABASE_URL` to a PostgreSQL URL to change engines; the models use portable types. See
-`docs/DATABASE.md`.
+`docs/database.md`.
 
 ### Reset or reseed
 
@@ -128,7 +128,7 @@ React 18 + TypeScript (Vite) ── /api/v1 ──▶ FastAPI ── SQLAlchemy 
 - **Infrastructure:** two Docker images, Compose with a persistent volume, health checks,
   nginx reverse proxy, idempotent seed.
 
-Read `docs/HLD.md`, `docs/LLD.md` and `docs/ARCHITECTURE.md` for detail.
+Read `docs/hld.md`, `docs/lld.md` and `docs/architecture.md` for detail.
 
 ## Repository layout
 
@@ -187,7 +187,7 @@ cd frontend; npx playwright test
 - Evidence deletion is permanent in this prototype (no tombstone).
 - Research activity is never attributed to revenue or repeat-purchase change.
 
-Full lists: `docs/RISKS.md`, `docs/DEFECT_REGISTER.md`, `docs/TASKS.md`.
+Full lists: `docs/risks.md`, `docs/DEFECT_REGISTER.md`, `docs/tasks.md`.
 
 ## Documentation
 

@@ -26,7 +26,7 @@ schedule of five tables instead of two. Accepted: the product's whole value is t
 ## 2. No authentication, stated loudly
 
 **Chosen:** a role picker that writes a user id to `localStorage`, with the absence of security
-documented on the entry screen, in the API description, and in [AUTH.md](AUTH.md).
+documented on the entry screen, in the API description, and in [auth.md](auth.md).
 
 **Rejected:** a fake login (any password accepted), UI-only role checks, or spending the three
 weeks on auth.
@@ -35,7 +35,7 @@ weeks on auth.
 reviewer can believe there is protection that is not there.
 
 **Cost:** the prototype cannot be shown with real data, or hosted publicly without a proxy
-password. Mitigations and a concrete migration path are in [AUTH.md](AUTH.md).
+password. Mitigations and a concrete migration path are in [auth.md](auth.md).
 
 ## 3. SQLite by default, PostgreSQL by configuration
 

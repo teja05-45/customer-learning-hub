@@ -164,7 +164,7 @@ Then **Settings → Exports** → download **Evidence CSV**.
 > are visible instead of dressed up.
 >
 > What it deliberately does not do: authentication, audio recording, email sending, real data,
-> or statistics it cannot support. `docs/AUTH.md` and `docs/17-limitations-and-next-steps.md`
+> or statistics it cannot support. `docs/auth.md` and `docs/17-limitations-and-next-steps.md`
 > say exactly what it would take to close each gap."
 
 ---

@@ -139,4 +139,4 @@ present. They are recorded so the investigation is auditable, not asserted as fi
 
 No authentication/authorisation; SQLite single-writer; lists load unpaginated in several
 screens; deletion is permanent rather than tombstoned; no automated visual regression. See
-`RISKS.md`, `ROADMAP.md`, `TASKS.md`.
+`risks.md`, `roadmap.md`, `tasks.md`.

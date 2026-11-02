@@ -81,7 +81,7 @@ fallback.
 | Gap | Why | Risk |
 | --- | --- | --- |
 | No unit tests for React components | The value here is the flow, and the flow is covered end to end | A component logic bug is caught late |
-| No authentication tests | There is no authentication | N/A until AUTH.md is implemented |
+| No authentication tests | There is no authentication | N/A until auth.md is implemented |
 | No load or performance test | Prototype dataset is ~70 records | Unknown behaviour beyond a few thousand records |
 | No PostgreSQL matrix | SQLite is the configured default; alembic migration is written but CI does not run both | JSON columns and `nulls_last()` ordering are the likely differences |
 | No visual regression diffing | Screenshots are documentation, not assertions | Styling regressions are caught by eye |

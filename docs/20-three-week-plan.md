@@ -21,7 +21,7 @@ happens when an insight has no evidence?"* → insight validation was made to fa
 the `evidence_warning` field was added.
 
 **Deliberately deferred:** any styling, and any role-based filtering (there is none — see
-[AUTH.md](AUTH.md)).
+[auth.md](auth.md)).
 
 ## Week 2 — Build the loop in the browser
 
@@ -70,7 +70,7 @@ three-state status, and the "unverified" filter was added.
 
 | Cut | Why | Where it is recorded |
 | --- | --- | --- |
-| Authentication | Not the thing being evaluated; faking it would be worse | [AUTH.md](AUTH.md) |
+| Authentication | Not the thing being evaluated; faking it would be worse | [auth.md](auth.md) |
 | Audio recording | Media retention and consent is its own project | [17-limitations-and-next-steps.md](17-limitations-and-next-steps.md) |
 | Email dispatch | Deliverability and compliance, not research management | [01-product-brief.md](01-product-brief.md) |
 | Insight merging | Real need, but not on the critical path | [17-limitations-and-next-steps.md](17-limitations-and-next-steps.md) |

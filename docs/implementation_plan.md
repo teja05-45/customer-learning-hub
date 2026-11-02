@@ -47,7 +47,7 @@ the evidence model; business owner reviews the decision form on day 8.
 | --- | --- | --- | --- |
 | 11 | Defect triage and fixes from integration testing | Confirmed defect register closed or explicitly deferred | Week 2 build |
 | 11–12 | Security and privacy verification | Data minimisation, consent gate, CSV injection, no secrets | Stable build |
-| 12 | Acceptance testing against `ACCEPTANCE_CRITERIA.md` | Every must-have checked with evidence | Defect fixes |
+| 12 | Acceptance testing against `acceptance_criteria.md` | Every must-have checked with evidence | Defect fixes |
 | 12–13 | Docker verification and Windows runbook | `docker compose up --build` works on a clean machine | Compose files |
 | 13 | Documentation and handover pack | README, architecture, API, operations, known limits | Verified build |
 | 13–14 | Adoption plan: demo script, champion session, feedback loop | Two teams can run the workflow unaided | Handover |
@@ -73,4 +73,4 @@ The customer can run the shampoo journey unaided, explain why an insight is or i
 evidence-backed, find prior research before commissioning new work, and state the known
 limitations without prompting. The code base and runbook allow another engineer to continue.
 
-See `TASKS.md`, `ROADMAP.md`, `RISKS.md` and `20-three-week-plan.md`.
+See `tasks.md`, `roadmap.md`, `risks.md` and `20-three-week-plan.md`.

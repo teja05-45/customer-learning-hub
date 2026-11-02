@@ -112,4 +112,4 @@ $env:E2E_BASE_URL="http://localhost:8081"; cd frontend; npx playwright test
 ## Production gaps
 
 This stack is not production-hardened: there is no authentication, no TLS termination, no
-rate limiting and SQLite is single-writer. See `SECURITY.md`, `AUTH.md` and `ROADMAP.md`.
+rate limiting and SQLite is single-writer. See `security.md`, `auth.md` and `roadmap.md`.

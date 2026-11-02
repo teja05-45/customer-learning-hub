@@ -10,7 +10,7 @@ what it would change.
 
 ## Blocking for any real use
 
-### 1. No authentication or authorisation — `AUTH.md`
+### 1. No authentication or authorisation — `auth.md`
 
 Anyone who can reach the URL can read, edit and reset everything. Roles exist as data and are
 enforced nowhere.

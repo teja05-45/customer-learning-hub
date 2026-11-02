@@ -2,7 +2,7 @@
 
 The prototype identifies the acting user with the ``X-Demo-User-Id`` header.
 That is a *demonstration* mechanism only: it is not authentication and it grants
-no security. See docs/AUTH.md for the production plan.
+no security. See docs/auth.md for the production plan.
 """
 
 from fastapi import Depends, Header, Query, Request

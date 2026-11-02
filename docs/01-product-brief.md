@@ -57,7 +57,7 @@ output and the CEO who wants to know whether research is being used. See
 
 | Not built | Why |
 | --- | --- |
-| Authentication and permissions | The brief is a demonstration; pretending to have security would be worse than being explicit. See [AUTH.md](AUTH.md). |
+| Authentication and permissions | The brief is a demonstration; pretending to have security would be worse than being explicit. See [auth.md](auth.md). |
 | Audio recording or transcription | Consent, storage and retention for audio is a separate product problem; the prototype stores typed notes only. |
 | Email or SMS sending | Recruitment stages are tracked, not dispatched. No channel integration, no deliverability, no unsubscribe handling. |
 | Real customer data or integrations | No Everyday Goods system is touched. All people, conversations and outcomes are invented. |

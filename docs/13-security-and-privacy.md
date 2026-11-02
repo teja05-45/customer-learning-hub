@@ -26,7 +26,7 @@ record or in search results.
 | --- | --- | --- | --- |
 | Quote attributed to the wrong person | Medium | High — reputational, possibly a consent breach | Provenance fields, interview/participant foreign keys, evidence type separation |
 | Claim presented as customer evidence when it was internal judgement | High | High | `evidence_sufficient` on decisions, evidence typed `researcher_interpretation`, honesty notes |
-| Unauthorised access to the workspace | High (no auth) | High | **Not mitigated** — see [AUTH.md](AUTH.md) |
+| Unauthorised access to the workspace | High (no auth) | High | **Not mitigated** — see [auth.md](auth.md) |
 | Synthetic data mistaken for real customer data | Medium | Medium | Banner, footer note, `is_synthetic` column, `X-Data-Origin` header, README and docs repeated |
 | Person quoted without consent to quote | Medium | High | `consent_records` per type; recording blocked without granted consent |
 | SQL injection | Low | High | SQLAlchemy expressions throughout; no raw SQL string interpolation |
@@ -87,7 +87,7 @@ record or in search results.
 
 Minimum viable change list, in order:
 
-1. SSO or email+password with server-side sessions ([AUTH.md](AUTH.md)).
+1. SSO or email+password with server-side sessions ([auth.md](auth.md)).
 2. TLS and a hardened proxy in front of nginx.
 3. Role checks on every mutating router.
 4. Retention job plus a documented deletion path for a participant.

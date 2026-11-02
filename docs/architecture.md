@@ -83,7 +83,7 @@ affected keys. Local form state stays local. There is no global Redux-style stor
 - **Honesty in the response.** Warnings are server-produced, not reconstructed in the UI, so
   every screen shows the same caveat.
 - **Demo identity.** `X-Demo-User-Id` identifies an actor for the activity log. It grants no
-  permission. See `AUTH.md`.
+  permission. See `auth.md`.
 - **Synthetic data.** Seeding is idempotent and guarded by a user-count check.
 
 ## Trade-offs
@@ -96,4 +96,4 @@ affected keys. Local form state stays local. There is no global Redux-style stor
 | No auth | Reviewer can explore immediately | Not deployable to the public internet |
 | In-memory filtering for JSON list fields | Portable SQLite/PostgreSQL | Loads all projects; fine at prototype scale |
 
-See `HLD.md`, `LLD.md`, `DECISIONS.md` and `../docs/05-data-model.md` for detail.
+See `hld.md`, `lld.md`, `decisions.md` and `../docs/05-data-model.md` for detail.

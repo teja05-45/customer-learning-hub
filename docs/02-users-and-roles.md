@@ -8,7 +8,7 @@
 The prototype seeds seven fictional people across five roles. They are switchable from the
 demonstration entry screen — one click, no password. That switch is a **UI convenience, not
 authentication**: every API request is served with the same permissions regardless of who is
-selected. See [AUTH.md](AUTH.md).
+selected. See [auth.md](auth.md).
 
 ## The five roles
 

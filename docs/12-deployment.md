@@ -82,7 +82,7 @@ porting: `ORDER BY … NULLS LAST` (supported by PostgreSQL, emulated on SQLite)
 
 A real deployment needs, at minimum:
 
-1. **Authentication** — the plan is in [AUTH.md](AUTH.md).
+1. **Authentication** — the plan is in [auth.md](auth.md).
 2. **A managed database** with backups, and migrations run as a release step, not on import.
 3. **A reverse proxy with TLS** in front of nginx, and `CORS_ORIGINS` restricted to the real
    origin.

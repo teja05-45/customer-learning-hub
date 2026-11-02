@@ -227,7 +227,7 @@ export function LoginPage() {
             <div>
               <strong>Demo entry creates a real session, but this is not SSO.</strong> The API enforces role
               permissions on every write. Connecting an identity provider is the remaining production step; see
-              docs/AUTH.md.
+              docs/auth.md.
             </div>
           </div>
 

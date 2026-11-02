@@ -94,4 +94,4 @@ meaningful word to appear in at least one searchable column, returns grouped res
 
 PostgreSQL and a managed platform, pagination for every list, aggregate SQL instead of Python
 loops, and background exports. Authentication and role enforcement are the first production
-prerequisites. See `ROADMAP.md` and `17-limitations-and-next-steps.md`.
+prerequisites. See `roadmap.md` and `17-limitations-and-next-steps.md`.
