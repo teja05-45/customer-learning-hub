@@ -13,16 +13,34 @@ Every `/api/v1` route except the public ones requires a server-side session, car
 (demo mode only). A missing or expired session returns `401 unauthorized`; a role that may not
 perform the write returns `403 forbidden`. `X-Demo-User-Id` is ignored.
 
+Failed sign-ins are throttled per client address and per account: after `LOGIN_MAX_FAILURES`
+(default 8) failures inside `LOGIN_WINDOW_SECONDS` (default 300) the login endpoint answers
+`429 rate_limited` with a `Retry-After` header and issues no cookie. A successful sign-in clears
+the counter. State-changing requests are also refused with `403 csrf_origin_rejected` when the
+browser reports an `Origin` or `Referer` this deployment does not trust; requests with neither
+header (curl, server-to-server) are unaffected.
+
 ## Authentication
 
 | Method | Path | Auth | Notes |
 | --- | --- | --- | --- |
 | POST | `/auth/register` | Public while no user exists | `{name, email, password, organisation_name}`; first account becomes `admin`; `403 registration_closed` afterwards |
-| POST | `/auth/login` | Public | `{email, password}`; sets the session cookie; identical error for unknown email and wrong password |
+| POST | `/auth/login` | Public | `{email, password}`; sets the session cookie; identical error for unknown email and wrong password; `429 rate_limited` when throttled |
 | POST | `/auth/logout` | Public | Deletes the session row and cookie; idempotent |
 | GET | `/auth/me` | Session | Current user |
 | POST | `/auth/password` | Session | `{current_password, new_password}`; revokes other sessions |
 | POST | `/auth/demo` | Public when `DEMO_MODE=true` | `{user_id}`; issues a real session for a seeded synthetic user; `403 demo_disabled` otherwise |
+
+## Accounts (administrator only)
+
+Every route below requires the `admin` role; a researcher or reviewer receives `403 forbidden`.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/users` | Every account: name, email, role, job title, active flag, creation time |
+| POST | `/users` | `{name, email, role, job_title, password}`; 201; `409 conflict` for a duplicate email |
+| PATCH | `/users/{id}` | `{name?, role?, job_title?, is_active?}`; deactivating revokes that account's sessions; the last active administrator cannot be demoted or deactivated (`400 rule_violation`) |
+| POST | `/users/{id}/password` | `{new_password}`; revokes the target's sessions. No email is sent — the administrator passes the password on |
 
 ## System
 
@@ -56,7 +74,7 @@ perform the write returns `403 forbidden`. `X-Demo-User-Id` is ignored.
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/participants` | `q`, `segment[]`, `eligibility[]`, `product_category`, `sort`, pagination |
-| POST | `/participants` | Contact fields are ignored; record is `is_synthetic: true` |
+| POST | `/participants` | Contact fields are ignored; records created here are real, so `is_synthetic: false` (only the seed sets it true) |
 | GET | `/participants/{id}` | Recruitment history, participation history, evidence count |
 | PATCH | `/participants/{id}` | Edit segment, eligibility, purchase context, notes |
 | POST | `/participants/{id}/assign` | Add to a project pipeline |

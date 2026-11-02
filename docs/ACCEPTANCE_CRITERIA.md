@@ -82,7 +82,7 @@ Status is based on executed checks. "Verified" names the test or manual check us
 | G2 | Demo entry is refused outside demo mode and issues a real session inside it | Pass | `test_demo_entry_requires_demo_mode` |
 | G3 | CSV exports are labelled synthetic and formula-safe | Pass | Export test; `_csv_safe` |
 | G4 | No secrets or `.env` in the image or repository | Pass | `.dockerignore`; `.gitignore` |
-| G5 | Backend tests pass | Pass | 69 passed (`pytest -q`, 2 Nov 2026) |
+| G5 | Backend tests pass | Pass | 79 passed (`pytest -q`, 2 Nov 2026) |
 | G6 | Frontend typecheck and build pass | Pass | `tsc --noEmit`, `vite build` |
 | G7 | Browser journey and accessibility checks pass | Pass | 7 Playwright tests |
 | G8 | Docker Compose starts and both services are healthy | Not re-verified | Docker daemon unavailable in this environment; see `deployment.md` |
@@ -90,3 +90,7 @@ Status is based on executed checks. "Verified" names the test or manual check us
 | G10 | Password authentication, server-side sessions and role enforcement | Pass | `test_auth.py` (9 tests); `auth.md` |
 | G11 | Only a non-administrator role can reproduce the "Export failed" defect | Pass | `test_exports.py::test_a_researcher_can_export` |
 | G12 | Every CSV export downloads with correct headers | Pass | `test_exports.py` (8 parameterised cases) |
+| G13 | Repeated failed sign-ins are throttled with `Retry-After`, and a success clears the counter | Pass | `test_security.py` (3 tests) |
+| G14 | Cross-site state-changing requests are refused; trusted origins still work | Pass | `test_security.py::test_cross_site_writes_are_rejected` |
+| G15 | An administrator can add accounts, change roles, deactivate leavers and reset passwords | Pass | `test_security.py` (4 tests); Settings screen |
+| G16 | The last active administrator cannot be demoted or deactivated | Pass | `test_security.py::test_the_last_administrator_cannot_be_removed` |

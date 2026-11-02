@@ -20,6 +20,17 @@ are implemented; TLS termination, rate limiting and CSRF tokens are not.
   the matrix.
 - Logout deletes the session; a password change deletes all other sessions for that user.
 - Failed logins return the same message and status for an unknown email and a wrong password.
+- Failed sign-ins are throttled per client address and per account (`LOGIN_MAX_FAILURES`, default
+  8, inside `LOGIN_WINDOW_SECONDS`, default 300). A throttled request answers `429 rate_limited`
+  with `Retry-After` and issues no cookie; a successful sign-in clears the counter. The counters
+  live in the API process, so several replicas would each allow their own quota — a shared store
+  is required before the limit can be relied on across replicas.
+- State-changing requests are refused with `403 csrf_origin_rejected` when the browser reports an
+  `Origin` or `Referer` outside `CORS_ORIGINS` and the request's own host, or an opaque
+  `Origin: null`. Requests with neither header (curl, the test suite, server-to-server) pass,
+  because they cannot be made to carry a victim's cookie.
+- `TRUST_PROXY_HEADERS` is off by default; only enable it behind a proxy that overwrites
+  `X-Forwarded-For`, otherwise the address a limit is keyed on can be spoofed.
 
 ## Data minimisation
 
@@ -84,14 +95,14 @@ administrator can edit or delete rows. Retention is not automated.
 | PII entering the system | Contact fields rejected by the schema | Free-text notes could contain names typed by a user |
 | CSV formula injection | Cell prefixing | Other export formats not implemented |
 | Session theft via XSS | `HttpOnly` cookie; React escaping | No CSP header is set by nginx |
-| Cross-site request forgery | `SameSite=Lax`, JSON-only API | No CSRF token |
-| Credential stuffing | None | **No rate limiting or lockout** |
+| Cross-site request forgery | `SameSite=Lax`; unsafe requests with a foreign `Origin`/`Referer` or `Origin: null` are refused | Header-less clients are trusted by design; no double-submit token |
+| Credential stuffing | Per-address and per-account failure counters with `429` and `Retry-After` | Counters are per process; no CAPTCHA or distributed store |
 
 ## Production prerequisites
 
 1. TLS termination (`COOKIE_SECURE=true` behind HTTPS) and HSTS.
-2. Rate limiting on `/auth/login` and a lockout policy.
-3. CSRF tokens if any write can be triggered cross-site.
+2. A shared rate-limit store if the API runs more than one process or replica.
+3. A CSRF token if the API is ever served to a third-party client that sends no `Origin`.
 4. Managed secrets, encrypted storage and tested backups (`backup_recovery.md`).
 5. Automated retention/deletion aligned with `retention_months`.
 6. Immutable audit logging for evidence deletion and decision changes.

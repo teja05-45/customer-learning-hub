@@ -67,14 +67,18 @@ keeps the configuration simple, and `SameSite=Lax` blocks cross-site form submis
   step; the `password_hash` column is nullable so SSO-only users can exist.
 - **No email-based password reset.** A user who forgets a password needs an administrator. The
   self-service change flow requires the current password.
-- **No account/invitation management UI.** User rows are created by the seed (demo) or the
-  first-run registration; additional accounts are a documented administrator task.
+- **Account management, not invitations.** An administrator creates accounts in Settings (or at
+  `POST /users`), changes roles, deactivates leavers and resets passwords. There is no emailed
+  invitation or self-service "forgot password" link, because no email provider is configured;
+  the administrator hands the initial or reset password over directly.
 - **Single organisation.** `OrganizationSetting` is a singleton and every record belongs to it,
   so cross-organisation isolation cannot be violated — but multi-tenancy is not implemented.
-- **No CSRF token.** `SameSite=Lax` plus a JSON-only API (no form posts, no `text/plain`
-  accepted) mitigates the classic CSRF vectors; a token is still required before exposing
-  cookie-authenticated writes to untrusted origins.
-- **No rate limiting or lockout** on the login endpoint.
+- **CSRF defence is origin-based, not token-based.** `SameSite=Lax` plus a check that refuses
+  unsafe requests whose browser-reported `Origin`/`Referer` is outside `CORS_ORIGINS` and the
+  request's own host. Header-less clients are trusted, so a double-submit token remains the
+  stricter option if third-party clients ever call the API directly.
+- **Throttling is in-process.** Failed sign-ins are limited per address and per account (8 per
+  5 minutes by default). A multi-replica deployment needs a shared counter store.
 
 ## Tests
 

@@ -2,6 +2,32 @@
 
 Format: what changed and why it matters. No claim is made for a change that was not executed.
 
+## 1.3.0 — Credential throttling, CSRF defence and account administration
+
+### Added
+
+- Failed sign-ins are throttled per client address and per account by an in-process sliding
+  window (`app/core/ratelimit.py`). A blocked attempt returns `429 rate_limited` with
+  `Retry-After` and issues no cookie; a successful sign-in clears the counter. Limits are
+  environment-driven (`LOGIN_MAX_FAILURES`, `LOGIN_WINDOW_SECONDS`) and `TRUST_PROXY_HEADERS`
+  controls whether `X-Forwarded-For` is believed.
+- State-changing requests are refused with `403 csrf_origin_rejected` when the browser reports
+  an `Origin`/`Referer` outside `CORS_ORIGINS` (or the request's own host) or an opaque
+  `Origin: null`. This closes the CSRF gap alongside `SameSite=Lax`.
+- Administrator account management: `GET/POST /users`, `PATCH /users/{id}` and
+  `POST /users/{id}/password`, plus the Settings UI to add a person, change a role, deactivate a
+  leaver and reset a password. Deactivation and password reset revoke that account's sessions,
+  and the last active administrator cannot be demoted or deactivated.
+- `tests/test_security.py` (10 tests) pins all of the above.
+
+### Changed
+
+- `GET /users` is administrator-only, because the directory exposes every email address; the
+  public `/session` directory still carries the name and role used by owner pickers.
+- Error responses may now carry headers (`Retry-After`), which the shared error envelope passes
+  through instead of dropping.
+
+
 ## 1.2.0 — Authentication and export correctness
 
 ### Added

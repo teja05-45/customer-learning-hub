@@ -24,6 +24,7 @@ The Playwright suite expects the API at `http://127.0.0.1:8000/api/v1` (override
 | --- | --- |
 | `tests/test_api.py` | Health, derived dashboard numbers, project CRUD/validation, 404 envelope, participant data minimisation, recruitment transitions, consent gate, evidence provenance, insight validation, decisions, actions, search, analytics labels, CSV export, demo reset, demo directory |
 | `tests/test_auth.py` | Anonymous requests rejected, password login/logout, cookie flags, role enforcement on writes, demo entry gated by demo mode, client-supplied identity header ignored, first-run registration, password change revoking other sessions |
+| `tests/test_security.py` | Failed-sign-in throttling and `Retry-After`, counter cleared by a successful login, per-account isolation, cross-site writes rejected (`Origin`, `Referer`, `Origin: null`), trusted and same-host origins accepted, reads unaffected, administrator account creation/role change/deactivation/password reset, and the last-administrator guard |
 | `tests/test_exports.py` | All eight CSV exports, non-administrator export (the "Export failed" regression), anonymous rejection, sensitive-column exclusion, Unicode, header-only empty dataset, audit entry, unknown-entity error |
 | `tests/test_workflow.py` | Question → project → participant → recruitment → interview → evidence → insight → decision → action → find it again |
 | `tests/test_journey.py` | The full journey with four segments, contradictions, validation, decision limits, action lifecycle, metric agreement, search navigation and cross-project rejection |
@@ -38,7 +39,7 @@ Executed on 2 November 2026 against the working tree of this release:
 
 ```
 cd backend && python -m pytest -q
-69 passed, 1 warning in 67.53s
+79 passed, 1 warning in 49.73s
 ```
 
 The warning is a third-party Starlette/anyio deprecation notice, not a project failure.
