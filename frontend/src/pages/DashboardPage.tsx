@@ -240,9 +240,13 @@ export function DashboardPage() {
             <EmptyState title="No participants yet" description="Add participants to see segment coverage." />
           ) : (
             <>
-              <div style={{ height: 168 }}>
+              <div
+                style={{ height: 168 }}
+                role="img"
+                aria-label="Synthetic participants by customer segment"
+              >
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
+                  <PieChart role="img" aria-label="Synthetic participants by customer segment">
                     <Pie
                       data={data.segments.map((segment) => ({
                         name: SEGMENT_LABELS[segment.segment],
