@@ -6,10 +6,22 @@ and must never introduce contact details or unlabelled records.
 
 from sqlalchemy import func, select
 
+ADMIN_EMAIL = "arjun.demo@example.test"
+
+
+def _login(client):
+    login = client.post(
+        "/api/v1/auth/login", json={"email": ADMIN_EMAIL, "password": "demo-password"}
+    )
+    assert login.status_code == 200, login.text
+
 
 def _counts(client) -> dict:
+    _login(client)
     response = client.post("/api/v1/demo/reset", json={"confirm": True, "phrase": "RESET"})
     assert response.status_code == 200, response.text
+    # The reset recreates every user, so the previous session no longer exists.
+    _login(client)
     return response.json()["counts"]
 
 

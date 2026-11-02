@@ -18,9 +18,23 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 
 
+ADMIN_EMAIL = "arjun.demo@example.test"
+RESEARCHER_EMAIL = "priya.demo@example.test"
+
+
 def _reset(client) -> None:
+    # Resetting replaces every user, so sign in as the administrator first and
+    # then re-authenticate as the researcher who runs the journey.
+    admin_login = client.post(
+        "/api/v1/auth/login", json={"email": ADMIN_EMAIL, "password": "demo-password"}
+    )
+    assert admin_login.status_code == 200, admin_login.text
     response = client.post("/api/v1/demo/reset", json={"confirm": True, "phrase": "RESET"})
     assert response.status_code == 200, response.text
+    login = client.post(
+        "/api/v1/auth/login", json={"email": RESEARCHER_EMAIL, "password": "demo-password"}
+    )
+    assert login.status_code == 200, login.text
 
 
 def _users(client) -> dict[str, dict]:
@@ -29,7 +43,13 @@ def _users(client) -> dict[str, dict]:
 
 
 def _headers(user: dict) -> dict[str, str]:
-    return {"X-Demo-User-Id": user["id"]}
+    """Identity travels in the server-issued session cookie, not a header.
+
+    The argument is kept so the journey reads as "this user acts here"; the
+    role is enforced by the API against the signed-in session.
+    """
+    assert user, "a real user must be selected for this step"
+    return {}
 
 
 def _metric(analytics: dict, key: str) -> dict:
@@ -307,8 +327,6 @@ def journey(client):
             "owner_id": owner["id"],
             "decision_date": date.today().isoformat(),
             "status": "proposed",
-            # Sufficiency is a human judgement recorded by the owner, separate
-            # from the fact that links exist.
             "evidence_sufficient": True,
             "insight_ids": [insight["id"]],
             "evidence_ids": [quote["id"]],
@@ -340,7 +358,9 @@ def journey(client):
 
     for status in ("in_progress", "blocked", "in_progress", "completed"):
         updated = client.patch(
-            f"/api/v1/actions/{action['id']}", headers=_headers(owner), json={"status": status}
+            f"/api/v1/actions/{action['id']}",
+            headers=_headers(owner),
+            json={"status": status},
         )
         assert updated.status_code == 200, updated.text
     action = updated.json()
@@ -386,9 +406,11 @@ def test_full_journey_produces_traceable_records(seeded, journey):
 def test_recruitment_history_survives_list_view(seeded, journey):
     """The pipeline list must carry stage history, not only the current stage."""
     listing = seeded.get("/api/v1/recruitment").json()
-    record = next(item for item in listing["items"] if item["id"] == journey["recruitment"][
-        journey["participants"]["first_time_buyer"]
-    ]["id"])
+    record = next(
+        item for item in listing["items"] if item["id"] == journey["recruitment"][
+            journey["participants"]["first_time_buyer"]
+        ]["id"]
+    )
     assert record["events"], "the pipeline list must return the stage timeline"
     assert record["events"][0]["to_stage"] == "completed"
 
@@ -443,13 +465,19 @@ def test_global_search_reaches_insight_and_evidence(seeded, journey):
     """Search must find the journey's insight and expose a navigable href."""
     result = seeded.get("/api/v1/search", params={"q": "in-store scent expectation"}).json()
     insight_hits = [
-        item for group in result["groups"] if group["entity_type"] == "insight" for item in group["items"]
+        item
+        for group in result["groups"]
+        if group["entity_type"] == "insight"
+        for item in group["items"]
     ]
     assert any(item["id"] == journey["insight"]["id"] for item in insight_hits)
 
     evidence_search = seeded.get("/api/v1/search", params={"q": "smelled different"}).json()
     evidence_hits = [
-        item for group in evidence_search["groups"] if group["entity_type"] == "evidence" for item in group["items"]
+        item
+        for group in evidence_search["groups"]
+        if group["entity_type"] == "evidence"
+        for item in group["items"]
     ]
     assert any(item["id"] == journey["quote"]["id"] for item in evidence_hits)
     assert all(hit["href"].startswith("/evidence/") for hit in evidence_hits)

@@ -6,6 +6,7 @@ involved. Dates are relative to the moment the seed runs so the dashboard and
 charts always look current.
 """
 
+from app.core.security import DEMO_PASSWORD, hash_password
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import delete, func, select
@@ -135,6 +136,9 @@ def _seed_users(db: Session) -> dict[str, User]:
         ("arjun", "Arjun Desai", "admin", "Operations & Data Support", "AD"),
     ]
     users = {}
+    # All demo accounts share one password, so hash it once: PBKDF2 is
+    # deliberately slow and rebuilding the dataset is a common operation.
+    demo_password_hash = hash_password(DEMO_PASSWORD)
     for key, name, role, title, initials in people:
         user = User(
             name=name,
@@ -142,6 +146,7 @@ def _seed_users(db: Session) -> dict[str, User]:
             role=role,
             job_title=title,
             initials=initials,
+            password_hash=demo_password_hash,
             created_at=_dt(120),
         )
         db.add(user)

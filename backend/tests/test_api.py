@@ -111,7 +111,9 @@ def test_participant_creation_never_stores_contact_details(seeded):
     assert body["code"].startswith("P-")
     assert "email" not in body
     assert "phone" not in body
-    assert body["is_synthetic"] is True
+    # A record entered through the API is real research data, not demo data,
+    # so it must not inherit the synthetic flag the seed uses.
+    assert body["is_synthetic"] is False
 
     search = seeded.get("/api/v1/search", params={"q": "should-not-be-stored"}).json()
     assert search["total"] == 0
@@ -402,12 +404,15 @@ def test_csv_export_is_labelled_synthetic(seeded):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
     assert response.headers["X-Data-Origin"] == "synthetic-demo-data"
+    assert response.headers["X-Row-Count"]
+    assert "attachment; filename=" in response.headers["content-disposition"]
     lines = response.text.strip().splitlines()
-    assert lines[0].endswith("is_synthetic,exported_at")
-    assert ",true," in lines[1]
+    assert lines[0].lstrip("\ufeff").endswith("data_origin,exported_at")
+    assert ",synthetic," in lines[1]
 
     unknown = seeded.get("/api/v1/exports/nope.csv")
     assert unknown.status_code == 400
+    assert "error" in unknown.json()
 
 
 def test_demo_reset_requires_confirmation_phrase(seeded):
@@ -422,9 +427,12 @@ def test_demo_reset_requires_confirmation_phrase(seeded):
     assert counts["participants"] >= 10
 
 
-def test_session_is_labelled_as_demo_not_authentication(seeded):
+def test_session_directory_is_demo_entry_not_an_identity_provider(seeded):
     body = seeded.get("/api/v1/session").json()
     assert body["demo_mode"] is True
-    assert "not authentication" in body["notice"]
+    # The directory must state that a real session is issued and enforced, and
+    # that the picker is still not a substitute for an identity provider.
+    assert "server-side session" in body["notice"]
+    assert "identity provider" in body["notice"]
     roles = {user["role"] for user in body["users"]}
     assert {"ceo", "researcher", "business_owner", "cx", "admin"} <= roles
