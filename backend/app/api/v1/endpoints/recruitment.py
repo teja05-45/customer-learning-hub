@@ -25,11 +25,11 @@ from app.schemas.participant import (
     RecruitmentUpdate,
 )
 from app.services.activity import log_activity
+from app.services.pipeline import advance_stage
 from app.services.serializers import recruitment_out, segment_coverage
 
 router = APIRouter(prefix="/recruitment", tags=["recruitment"])
 
-RESPONDED_STAGES = {"responded", "scheduled", "completed", "declined", "withdrawn"}
 INCLUDED_STAGES = ["scheduled", "completed"]
 
 SEGMENT_LABELS = {
@@ -111,7 +111,7 @@ def list_recruitment(
     coverage = segment_coverage(db, project_id) if project_id else {}
 
     return RecruitmentListResponse(
-        items=[recruitment_out(db, r) for r in records],
+        items=[recruitment_out(db, r, include_events=True) for r in records],
         total=len(records),
         stage_counts=stage_counts,
         segment_coverage=coverage,
@@ -217,33 +217,14 @@ def update_recruitment(
 
     previous = record.stage
     if payload.stage and payload.stage.value != previous:
-        allowed = {s.value for s in RECRUITMENT_TRANSITIONS.get(RecruitmentStage(previous), set())}
-        if payload.stage.value not in allowed:
-            raise RuleViolationError(
-                f"Cannot move from '{previous}' to '{payload.stage.value}'.",
-                details={"allowed": sorted(allowed)},
-            )
-        record.stage = payload.stage.value
-        now = datetime.now(timezone.utc)
-        if payload.stage.value == "invited" and record.invited_at is None:
-            record.invited_at = now
-        if payload.stage.value in RESPONDED_STAGES and record.responded_at is None:
-            record.responded_at = now
-        if payload.stage.value == "invited":
-            record.responded_at = None
-        record.updated_at = now
-        db.add(
-            RecruitmentEvent(
-                recruitment_id=record.id,
-                from_stage=previous,
-                to_stage=record.stage,
-                note=payload.note or f"Moved from {previous.replace('_', ' ')} to {payload.stage.value.replace('_', ' ')}.",
-                actor_id=actor.id if actor else None,
-            )
+        advance_stage(
+            db,
+            record,
+            payload.stage.value,
+            note=payload.note,
+            actor_id=actor.id if actor else None,
         )
         participant = db.get(Participant, record.participant_id)
-        if participant and payload.stage.value in ("invited", "scheduled", "completed"):
-            participant.last_research_contact_at = now
         log_activity(
             db,
             entity_type="recruitment",
