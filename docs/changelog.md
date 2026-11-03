@@ -2,6 +2,41 @@
 
 Format: what changed and why it matters. No claim is made for a change that was not executed.
 
+## 1.5.0 — Unified feedback sources
+
+### Added
+
+- `feedback_records` table and `FeedbackRecord` model covering eight source types: interview,
+  written feedback, structured form, short survey, customer support, product review, manual
+  entry and CSV import. Each record stores the original words, collection method, source
+  reference, collection date, contributor, project, optional participant and interview, and a
+  separate researcher interpretation.
+- `/api/v1/feedback` CRUD: list with project/source/verification/attribution/search filters,
+  create, read, update and audited delete. Writes require the researcher or administrator role
+  through the existing server-side policy.
+- Explicit research-depth classification (`deep`, `medium`, `limited`, `context`) with a note per
+  collection method. A short survey is never presented as equivalent to a moderated interview.
+- Verification requires a source reference. Interview sources must link to an interview in the
+  same project, and a cancelled interview cannot produce feedback. Unattributed records are
+  allowed but labelled everywhere.
+- Feedback sources page with source/verification/attribution filters, project filter, a create and
+  edit form, one-click verification, and a confirmed delete.
+- Feedback sources added as the ninth CSV export, including separate `content` and
+  `interpretation` columns.
+- Eleven backend tests and a browser journey for create, verify and delete. All primary-screen
+  accessibility, smoke and responsive checks now include the new page.
+- Five seeded synthetic feedback sources so the demo shows interviews, a survey, support
+  feedback, a product review and an import side by side.
+
+### Verified
+
+- Backend: 91 passed.
+- Browser: 14 passed, including axe and all nine exports.
+- `tsc --noEmit` and `vite build`: clean.
+
+No external support, review or CRM system is connected. Records only exist when someone with
+permission creates or imports them, and the deep-link to an external system is never implied.
+
 ## 1.4.0 — Executive Emerald redesign and browser-verified exports
 
 ### Changed

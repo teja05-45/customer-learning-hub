@@ -322,3 +322,27 @@ declared; SQLite stores them with its usual affinity.
 | `id` | `VARCHAR(36)` | no | primary key |
 
 - Constraint `uq_insight_evidence` (UniqueConstraint)
+
+## `feedback_records`
+
+| Column | Type | Nullable | Key / constraint |
+| --- | --- | --- | --- |
+| `code` | `VARCHAR(16)` | no | unique, indexed |
+| `project_id` | `VARCHAR(36)` | no | FK → research_projects.id, indexed |
+| `participant_id` | `VARCHAR(36)` | yes | FK → participants.id, indexed |
+| `interview_id` | `VARCHAR(36)` | yes | FK → interviews.id, indexed |
+| `source_type` | `VARCHAR(32)` | no | indexed |
+| `collection_method` | `VARCHAR(32)` | no | — |
+| `source_reference` | `VARCHAR(320)` | no | — |
+| `collected_at` | `DATETIME` | no | indexed |
+| `contributor` | `VARCHAR(160)` | no | — |
+| `content` | `TEXT` | no | original customer words |
+| `interpretation` | `TEXT` | no | researcher reading, stored separately |
+| `context` | `TEXT` | no | — |
+| `verification_status` | `VARCHAR(24)` | no | indexed, default `unverified` |
+| `created_by_id` | `VARCHAR(36)` | yes | FK → users.id |
+| `id` | `VARCHAR(36)` | no | primary key |
+| `created_at` | `DATETIME` | no | — |
+| `updated_at` | `DATETIME` | no | — |
+
+- Composite index `ix_feedback_project_source` (`project_id`, `source_type`).

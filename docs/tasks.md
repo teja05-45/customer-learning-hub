@@ -28,11 +28,15 @@ Status as delivered. "Verified" means covered by an executed check, not merely w
 | Analytics | Agreement with the dashboard | `test_dashboard_and_analytics_report_the_same_quantities` |
 | Search | Seven entity types, navigation, related research | Journey; search tests |
 | UX | Loading, empty, error, retry, toasts, confirmations, accessibility | Playwright smoke + axe |
+| Feedback | Unified feedback sources: interviews, written feedback, forms, surveys, support, reviews, manual entry and CSV import | `tests/test_feedback.py`, `feedback.spec.ts` |
+| Feedback | Explicit collection-depth labels, unattributed records, source-reference gate before verification | `test_survey_feedback_is_labelled_as_limited_depth`, `test_verified_source_requires_a_reference`, `test_unattributed_feedback_is_allowed_and_labelled` |
+| Feedback | Feedback page with filtering, edit, verify and audited delete | `feedback.spec.ts` |
+| Exports | Feedback sources added as a ninth CSV export | `exports.spec.ts`, `test_every_export_downloads` |
 | UX | Executive Emerald redesign across all screens and both entry/navigation shells | `docs/design.md`, regenerated screenshots, axe |
 | UX | Responsive layout verified at 375/768/1024/1440 plus the auth screen | `responsive.spec.ts` |
 | Exports | All eight Settings downloads exercised in a browser and parsed | `exports.spec.ts` |
 | Delivery | Docker images, Compose stack, health checks, volume | Compose verification |
-| Delivery | 79 backend tests, 13 browser tests, clean typecheck/build | Final verification run |
+| Delivery | 91 backend tests, 14 browser tests, clean typecheck/build | Final verification run |
 | Docs | Product, architecture, data, API, security, operations, plan, defects | This documentation set |
 
 ## Remaining (prioritised)

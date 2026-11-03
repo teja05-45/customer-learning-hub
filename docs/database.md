@@ -15,6 +15,8 @@ User 1───* ResearchProject 1───* ResearchQuestion
               ├──* Interview 1───* InterviewGuideQuestion
               │        ├──* ConsentRecord
               │        └──* Evidence
+              ├──* FeedbackRecord *───1 Participant (optional)
+              │        └── optional link to Interview
               ├──* Insight 1──* InsightEvidence *──1 Evidence
               └──* Decision 1──* DecisionInsight *──1 Insight
                        │        └──* DecisionEvidence *──1 Evidence
@@ -38,6 +40,7 @@ OrganizationSetting (single row, id = "default")
 | `interview_guide_questions` | interview_id, text, purpose, order_index, is_leading | Cascade with interview |
 | `consent_records` | interview_id, participant_id, consent_type, status, recorded_by_id, recorded_at, note | Auditable per consent type |
 | `evidence` | code (unique), interview_id, project_id, participant_id, evidence_type, content, interpretation, customer_context, segment, provenance, provenance_status, confidence, review_status, captured_at | The core record |
+| `feedback_records` | code (unique), project_id, participant_id (nullable), interview_id (nullable), source_type, collection_method, source_reference, collected_at, contributor, content, interpretation, context, verification_status, created_by_id | Unified collection source; unattributed records allowed. `ix_feedback_project_source` |
 | `insights` | code (unique), title, summary, interpretation, research_question, project_id, status, confidence, owner_id, limitations, segments (JSON), validated_at | `validated_internal` is a review state |
 | `insight_evidence` | insight_id, evidence_id, role, note | `uq_insight_evidence` |
 | `decisions` | code (unique), title, business_function, problem_statement, description, rationale, limitations, project_id, owner_id, decision_date, status, evidence_sufficient | Nullable sufficiency = not assessed |
@@ -54,8 +57,10 @@ OrganizationSetting (single row, id = "default")
 - Deleting a user sets ownership/actor columns to `NULL` (`ondelete="SET NULL"`).
 - Deleting an insight or evidence cascades its link rows; the other side is preserved so the
   loss of support is visible.
-- Deleting an interview cascades its guide, consent records and evidence; the participant and
-  project remain.
+- Deleting an interview cascades its guide, consent records and evidence; feedback records keep
+  their statement but their interview link is set to `NULL`. The participant and project remain.
+- Deleting a feedback source removes its statement and links; the project, participant and
+  interview survive. Deletion is written to `activity_logs` before the row is removed.
 - Unique constraints prevent duplicate evidence links on both insights and decisions.
 
 ## Indexes
@@ -72,7 +77,8 @@ cd backend
 .venv/Scripts/python.exe -m alembic revision --autogenerate -m "describe change"
 ```
 
-The initial revision is `alembic/versions/fb86ec9b6cc0_initial_schema.py`. Startup table
+The initial revision is `alembic/versions/fb86ec9b6cc0_initial_schema.py`; the feedback table is
+added by `e5f6a7b8c9d0_feedback_sources.py`. Startup table
 creation is a convenience for the demo; a production deployment should run migrations before
 accepting traffic.
 
@@ -80,8 +86,9 @@ accepting traffic.
 
 `app/seed/demo_data.py` creates the synthetic Everyday Goods dataset: users, projects with
 questions, participants across four segments, recruitment history, interviews with guides and
-consent, evidence with and without provenance, insights with supporting and contradictory
-links, decisions, actions and activity entries. Seeding is idempotent: it is skipped when users
+consent, evidence with and without provenance, feedback sources spanning interviews, surveys,
+support, reviews and imports, insights with supporting and contradictory links, decisions,
+actions and activity entries. Seeding is idempotent: it is skipped when users
 exist, and `POST /demo/reset` rebuilds it inside one transaction.
 
 **All rows are synthetic.** No real customer data is present, and no contact details exist in

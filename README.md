@@ -98,6 +98,7 @@ seed is idempotent: it is skipped when users already exist.
 | Participants | Synthetic directory, segment and eligibility filters, purchase context, participation history; no contact fields accepted |
 | Recruitment | Ten-stage pipeline, append-only history, segment coverage, defined response-rate denominator |
 | Interviews | Schedule, reschedule, cancel, complete, neutral guide, consent records, notes, summary, follow-up questions |
+| Feedback sources | Interviews, written feedback, structured forms, short surveys, support feedback, product reviews, manual entries and CSV imports in one provenance-preserving record; explicit depth labels; verification requires a source reference |
 | Evidence | Five types, provenance and verification status, review action, correction, supporting and contradictory links |
 | Insights | Create, edit, link/unlink evidence, confidence, limitations, review, related research |
 | Decisions | Problem, rationale, limitations, linked sources, owner, status; unevidenced decisions labelled |
@@ -105,7 +106,7 @@ seed is idempotent: it is skipped when users already exist.
 | Overview | Derived metrics, segment coverage, timeline, outstanding follow-ups, activity trail |
 | Analytics | Basis-labelled metrics, reuse detail, unresolved questions, measurement gaps |
 | Search | Deterministic search across seven entity types, with related-research suggestions |
-| Exports | Eight CSV entities with correct headers, Unicode, formula-injection safety, audit logging and empty-dataset handling |
+| Exports | Nine CSV entities, including feedback sources, with correct headers, Unicode, formula-injection safety, audit logging and empty-dataset handling |
 | Settings | Organisation name, research lead, recording default, retention months, demo reset |
 | Authentication | Email + password, PBKDF2 hashing, server-side sessions in an HTTP-only cookie, sign-out, password change |
 | Authorisation | API-enforced roles on every write; the browser cannot assert a role |
@@ -142,7 +143,7 @@ backend/
   app/schemas/            Pydantic contracts
   app/seed/               synthetic demo dataset
   alembic/                migration environment and initial revision
-  tests/                  79 pytest tests, including auth and export suites
+  tests/                  91 pytest tests, including auth, feedback and export suites
 frontend/
   src/pages/              one component per screen
   src/components/         shared UI, evidence card, search, dialogs
@@ -159,12 +160,12 @@ These commands were executed for this release:
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest -q                 # 79 passed
+.venv\Scripts\python.exe -m pytest -q                 # 91 passed
 
 cd ..\frontend
 npm run typecheck                                     # clean
 npm run build                                         # clean (one chunk-size advisory)
-npx playwright test                                   # 13 passed
+npx playwright test                                   # 14 passed
 
 cd ..
 docker compose up -d --build                          # both services healthy

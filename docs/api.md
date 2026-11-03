@@ -53,7 +53,7 @@ Every route below requires the `admin` role; a researcher or reviewer receives `
 | GET | `/search?q=&types=` | Global search across seven entity types |
 | GET | `/settings` / PATCH | Organisation settings (name, research lead, recording default) |
 | POST | `/demo/reset` | Rebuild the synthetic dataset (`{"confirm": true, "phrase": "RESET"}`) |
-| GET | `/exports/{entity}.csv` | CSV export for `projects`, `participants`, `recruitment`, `interviews`, `evidence`, `insights`, `decisions`, `actions`; any signed-in member; `X-Row-Count`, `X-Data-Origin`; audited |
+| GET | `/exports/{entity}.csv` | CSV export for `projects`, `participants`, `recruitment`, `interviews`, `evidence`, `feedback`, `insights`, `decisions`, `actions`; any signed-in member; `X-Row-Count`, `X-Data-Origin`; audited |
 
 ## Projects
 
@@ -96,6 +96,30 @@ Every route below requires the `admin` role; a researcher or reviewer receives `
 | POST | `/interviews/{id}/recording` | Rejected unless recording consent is `granted` |
 | GET | `/interviews/guide/default` | Neutral guide plus quality rules |
 
+## Feedback sources
+
+All routes require a session. Writes require the `researcher` or `admin` role; a `cx` or
+`business_owner` account receives `403 forbidden`.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/feedback` | `project_id`, `participant_id`, `source_type[]`, `verification_status[]`, `unattributed_only`, `q`; returns source counts, unverified and unattributed totals |
+| POST | `/feedback` | 201. Required: `project_id`, `source_type`, `collection_method`, `content`. Optional: `participant_id`, `interview_id`, `source_reference`, `collected_at`, `contributor`, `interpretation`, `context`, `verification_status` |
+| GET | `/feedback/{id}` | One source with project, participant, interview and creator refs, plus `research_depth` and `depth_note` |
+| PATCH | `/feedback/{id}` | Edits content, interpretation, context, contributor, reference, method, source type, participant, collected date or verification. Project and interview links are immutable |
+| DELETE | `/feedback/{id}` | Audited delete; returns the deleted code |
+
+Rules enforced by the API:
+
+- `source_type=interview` requires an `interview_id` in the same project; other source types may
+  not link an interview. Cancelled interviews are rejected.
+- `verification_status=verified` requires a non-empty `source_reference`.
+- `participant_id` is optional. An unattributed record is returned with `is_attributed: false`.
+- `research_depth` is derived from the collection method: interviews are `deep`, written and
+  structured feedback `medium`, short surveys `limited`, and support/review/import/manual records
+  `context`. `depth_note` explains the limitation.
+- The collection date may not be in the future.
+
 ## Evidence, insights, decisions, actions
 
 | Method | Path | Notes |
@@ -130,6 +154,12 @@ Every route below requires the `admin` role; a researcher or reviewer receives `
 - Insight: draft, under_review, validated_internal, needs_more_research, archived.
 - Decision: proposed, under_review, accepted, rejected, deferred.
 - Action: not_started, in_progress, completed, blocked.
+- Feedback source: interview, written_feedback, structured_form, short_survey, customer_support,
+  product_review, manual_entry, csv_import.
+- Collection method: in_person_interview, video_interview, phone_interview, written_feedback,
+  structured_form, short_survey, support_feedback, product_review, imported_feedback,
+  manual_entry.
+- Verification: unverified, needs_review, verified.
 
 ## Examples
 

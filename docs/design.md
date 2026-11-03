@@ -70,8 +70,11 @@ palette, modal, toasts and row hover are the animated surfaces. A global
 `components/ui.tsx` provides `Pill`, `SectionCard`, `PageHeader`, `StatCard`, `EmptyState`,
 `ErrorState`, `LoadingBlock`, `TableSkeleton`, `Notice`, `Spinner`, `HonestyNote`, `MetaItem`
 and `ProgressBar`. `EvidenceCard` puts the customer's statement and the researcher's
-interpretation in separate labelled blocks with different surfaces. `ConfirmDialog` gates
-destructive actions and supports a typed confirmation phrase.
+interpretation in separate labelled blocks with different surfaces. The feedback workspace uses
+the same rule: `.feedback-card` carries a source-coloured left edge, a quote block, a tinted
+interpretation block labelled as not the customer's words, and a provenance block. Its depth
+pill is always visible, so a survey is never styled like a moderated interview. `ConfirmDialog`
+gates destructive actions and supports a typed confirmation phrase.
 
 ## Required page states
 

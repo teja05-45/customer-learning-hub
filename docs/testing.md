@@ -32,6 +32,7 @@ The Playwright suite expects the API at `http://127.0.0.1:8000/api/v1` (override
 | `tests/test_pipeline.py` | Contacted/response-rate definitions, distinct-participant counting, interview-driven history events, stage-count/filter agreement, coverage derivation |
 | `tests/test_integrity.py` | Formula-injection neutralisation, settings persistence, link uniqueness, sufficiency recomputation, unlink audit trail |
 | `tests/test_seed.py` | Demo reset repeatability, unique generated codes, synthetic labelling, provenance mix |
+| `tests/test_feedback.py` | Statement and interpretation kept separate, survey depth labelled as limited, unattributed sources allowed and marked, verified sources require a reference, interview/project matching, source-type/interview mismatch, CX role rejection, filtering and review, audited deletion, CSV content preservation |
 
 ## Actual results
 
@@ -39,7 +40,7 @@ Executed on 3 November 2026 against the working tree of this release:
 
 ```
 cd backend && python -m pytest -q
-79 passed, 1 warning in 96.47s
+91 passed, 1 warning in 98.79s
 ```
 
 The warning is a third-party Starlette/anyio deprecation notice, not a project failure.
@@ -69,13 +70,13 @@ cookie round-trips through Starlette's `TestClient`.
 - `vite build` — succeeds with one chunk-size advisory (single ~1 MB bundle).
 - Playwright specs: `smoke.spec.ts` (primary screens, deep links, unknown route, API failure
   state, skip link, command palette), `a11y.spec.ts` (axe scan of every screen),
-  `journey.spec.ts` (research-to-decision workflow), `exports.spec.ts` (all eight Settings
-  downloads parsed as CSV), `responsive.spec.ts` (375/768/1024/1440 plus the auth screen),
-  `screenshots.spec.ts` (documentation captures).
+  `journey.spec.ts` (research-to-decision workflow), `exports.spec.ts` (all nine Settings
+  downloads parsed as CSV), `feedback.spec.ts` (record → verify → delete), `responsive.spec.ts`
+  (375/768/1024/1440 plus the auth screen), `screenshots.spec.ts` (documentation captures).
 
 ```
 cd frontend && npx playwright test
-13 passed (2.1m)
+14 passed (2.0m)
 ```
 
 Both servers were running for that run: FastAPI on `127.0.0.1:8000` and Vite on
