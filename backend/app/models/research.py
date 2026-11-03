@@ -146,7 +146,14 @@ class ConsentRecord(Base, IdMixin):
 
 
 class Evidence(Base, IdMixin):
-    """The atom of the product: customer words, kept with their provenance."""
+    """The atom of the product: customer words, kept with their provenance.
+
+    Evidence can come from an interview *or* from any other feedback source.
+    The provenance snapshot columns are filled when the item is derived from a
+    feedback record, so the customer's words keep the depth and verification
+    state they were collected with even if the source record is later corrected.
+    Interview evidence derives the same values from the live interview row.
+    """
 
     __tablename__ = "evidence"
 
@@ -154,6 +161,16 @@ class Evidence(Base, IdMixin):
     interview_id: Mapped[str | None] = mapped_column(
         ForeignKey("interviews.id", ondelete="CASCADE"), nullable=True, index=True
     )
+    feedback_record_id: Mapped[str | None] = mapped_column(
+        ForeignKey("feedback_records.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Snapshot of the feedback source at the moment evidence was derived from it.
+    source_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    collection_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    research_depth: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    source_reference: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    verification_state: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     project_id: Mapped[str] = mapped_column(
         ForeignKey("research_projects.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -174,6 +191,7 @@ class Evidence(Base, IdMixin):
 
     project: Mapped[ResearchProject] = relationship(back_populates="evidence")
     interview: Mapped[Interview | None] = relationship(back_populates="evidence")
+    feedback_record: Mapped["FeedbackRecord | None"] = relationship(foreign_keys=[feedback_record_id])
     participant: Mapped["Participant | None"] = relationship()  # noqa: F821
     captured_by: Mapped["User | None"] = relationship()  # noqa: F821
 

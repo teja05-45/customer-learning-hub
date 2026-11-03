@@ -117,8 +117,16 @@ class InsightStatus(str, Enum):
 
 
 class EvidenceRole(str, Enum):
+    """How one evidence item is used by one insight.
+
+    ``contextual`` exists because a great deal of feedback neither confirms nor
+    undermines a finding: it explains the setting. Recording it as supporting
+    would inflate the evidence base; discarding it would lose the context.
+    """
+
     SUPPORTING = "supporting"
     CONTRADICTORY = "contradictory"
+    CONTEXTUAL = "contextual"
 
 
 class DecisionStatus(str, Enum):

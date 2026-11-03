@@ -54,6 +54,7 @@ class EvidenceOut(ORMModel):
     id: str
     code: str
     interview_id: Optional[str]
+    feedback_record_id: Optional[str] = None
     project_id: str
     participant_id: Optional[str]
     evidence_type: EvidenceType
@@ -67,11 +68,21 @@ class EvidenceOut(ORMModel):
     review_status: ReviewStatus
     captured_at: datetime
     captured_by_id: Optional[str]
+    # Provenance of the originating feedback source. Stored as a snapshot for
+    # feedback-derived evidence, derived from the interview for interview evidence.
+    source_type: Optional[str] = None
+    collection_method: Optional[str] = None
+    research_depth: Optional[str] = None
+    source_reference: Optional[str] = None
+    verification_state: Optional[str] = None
+    collected_at: Optional[datetime] = None
+    is_attributed: bool = False
     is_verified_source: bool = False
     provenance_warning: Optional[str] = None
     participant: Optional[Ref] = None
     captured_by: Optional[Ref] = None
     interview: Optional[Ref] = None
+    feedback_record: Optional[Ref] = None
     project: Optional[Ref] = None
     insight_links: list[EvidenceLinkOut] = Field(default_factory=list)
 

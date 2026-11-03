@@ -49,18 +49,42 @@ class Insight(Base, IdMixin, TimestampMixin):
 
 
 class InsightEvidence(Base, IdMixin):
+    """Explicit association entity between one insight and one evidence item.
+
+    The classification lives here, not on the evidence: the same quote can
+    support one finding, contradict another and merely add context to a third.
+    Every row carries the researcher's rationale and the author, because a
+    classification without a reason is an assertion nobody can review later.
+    """
+
     __tablename__ = "insight_evidence"
 
     insight_id: Mapped[str] = mapped_column(ForeignKey("insights.id", ondelete="CASCADE"), nullable=False, index=True)
     evidence_id: Mapped[str] = mapped_column(ForeignKey("evidence.id", ondelete="CASCADE"), nullable=False, index=True)
     role: Mapped[str] = mapped_column(String(16), nullable=False, default="supporting")
     note: Mapped[str] = mapped_column(String(240), nullable=False, default="")
+    # Why the researcher judged this relationship the way they did. Free text,
+    # never generated from the customer statement. Confidence is an explicit
+    # researcher judgement, not a probability.
+    rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    confidence: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    tags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_by_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
 
     insight: Mapped[Insight] = relationship(back_populates="evidence_links")
     evidence: Mapped["Evidence"] = relationship()  # noqa: F821
+    created_by: Mapped["User | None"] = relationship()  # noqa: F821
 
-    __table_args__ = (UniqueConstraint("insight_id", "evidence_id", name="uq_insight_evidence"),)
+    __table_args__ = (
+        UniqueConstraint("insight_id", "evidence_id", name="uq_insight_evidence"),
+        Index("ix_insight_evidence_insight_role", "insight_id", "role"),
+    )
 
 
 class Decision(Base, IdMixin, TimestampMixin):
