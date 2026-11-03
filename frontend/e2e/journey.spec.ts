@@ -25,6 +25,13 @@ test('a complete research-to-decision journey is visible and editable in the UI'
   const asResearcher = { 'X-Demo-User-Id': researcher.id }
   const asOwner = { 'X-Demo-User-Id': owner.id }
 
+  // The API context is separate from the browser cookie jar, so it signs in on
+  // its own. The identity header is ignored by the server and grants nothing.
+  const researcherLogin = await request.post(`${API_URL}/auth/demo`, {
+    data: { user_id: researcher.id },
+  })
+  expect(researcherLogin.status(), 'researcher API sign-in').toBe(200)
+
   // 1. A project with a written business question and four target segments.
   const projectResponse = await request.post(`${API_URL}/projects`, {
     headers: asResearcher,
@@ -144,7 +151,14 @@ test('a complete research-to-decision journey is visible and editable in the UI'
     data: { evidence_id: contradictory.id, role: 'contradictory' },
   })
 
-  // 9-10. Decision plus a follow-up action with an owner.
+  // 9-10. Decision plus a follow-up action with an owner. Decisions need the
+  // business-owner role, so this context signs in as that user now that every
+  // researcher write is complete.
+  const ownerLogin = await request.post(`${API_URL}/auth/demo`, {
+    data: { user_id: owner.id },
+  })
+  expect(ownerLogin.status(), 'owner API sign-in').toBe(200)
+
   const decisionResponse = await request.post(`${API_URL}/decisions`, {
     headers: asOwner,
     data: {

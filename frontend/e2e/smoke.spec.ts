@@ -21,14 +21,16 @@ const SCREENS: Array<{ path: string; heading: string }> = [
 ]
 
 test('every primary screen renders for the lead researcher', async ({ page }) => {
+  await resetDemoData(page.request)
+  await enterAs(page, 'Priya Menon')
+
+  // Collect errors only once signed in: the signed-out /auth/me probe is a
+  // deliberate 401 and is handled by the session provider.
   const consoleErrors: string[] = []
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text())
   })
   page.on('pageerror', (error) => consoleErrors.push(String(error)))
-
-  await resetDemoData(page.request)
-  await enterAs(page, 'Priya Menon')
 
   for (const screen of SCREENS) {
     await page.goto(screen.path)
@@ -52,9 +54,9 @@ test('deep links, unknown routes and the API error state behave', async ({ page 
   await enterAs(page, 'Priya Menon')
 
   // Deep link straight into a seeded record (the router must not depend on clicks).
-  const projects = await page.request.get(
-    `${process.env.E2E_API_URL ?? 'http://127.0.0.1:8000/api/v1'}/projects`,
-  )
+  // Relative to the web origin so the request carries the same cookie the
+  // browser received through the Vite proxy.
+  const projects = await page.request.get('/api/v1/projects')
   const body = await projects.json()
   const project = body.items[0]
   await page.goto(`/projects/${project.id}`)
