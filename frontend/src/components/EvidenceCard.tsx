@@ -4,22 +4,97 @@ import { AlertTriangle, BadgeCheck } from 'lucide-react'
 import type { Evidence } from '../types'
 import { Pill } from './ui'
 import {
+  COLLECTION_METHOD_LABELS,
   CONFIDENCE_TONE,
+  DEPTH_LABELS,
+  DEPTH_TONE,
   EVIDENCE_TONE,
   EVIDENCE_TYPE_LABELS,
+  FEEDBACK_SOURCE_LABELS,
   SEGMENT_LABELS,
+  VERIFICATION_LABELS,
+  VERIFICATION_TONE,
   formatDate,
   titleCase,
 } from '../utils/format'
+
+/** The source of an evidence item, kept separate from the customer's words. */
+export function EvidenceSource({ evidence }: { evidence: Evidence }) {
+  const sourceLabel = evidence.source_type
+    ? evidence.source_type === 'interview'
+      ? 'Interview'
+      : FEEDBACK_SOURCE_LABELS[evidence.source_type] ?? titleCase(evidence.source_type)
+    : 'Source type not recorded'
+
+  return (
+    <div className="provenance-block">
+      <span className="label">
+        <BadgeCheck size={11} style={{ marginRight: 3 }} /> Provenance
+      </span>
+      <div className="section-grid grid-2" style={{ gap: 6, rowGap: 2 }}>
+        <span>
+          Source: <strong>{sourceLabel}</strong>
+        </span>
+        <span>
+          Method:{' '}
+          {evidence.collection_method
+            ? COLLECTION_METHOD_LABELS[evidence.collection_method]
+            : 'Not recorded'}
+        </span>
+        <span>
+          Depth:{' '}
+          {evidence.research_depth ? (
+            <Pill tone={DEPTH_TONE[evidence.research_depth]}>
+              {DEPTH_LABELS[evidence.research_depth]}
+            </Pill>
+          ) : (
+            'Not recorded'
+          )}
+        </span>
+        <span>
+          Verification:{' '}
+          {evidence.verification_state ? (
+            <Pill tone={VERIFICATION_TONE[evidence.verification_state]}>
+              {VERIFICATION_LABELS[evidence.verification_state]}
+            </Pill>
+          ) : (
+            'Not recorded'
+          )}
+        </span>
+        <span>Collected: {formatDate(evidence.collected_at)}</span>
+        <span>
+          Reference:{' '}
+          {evidence.source_reference || evidence.provenance || 'No source reference recorded'}
+        </span>
+      </div>
+      <div className="mt-1">
+        {evidence.interview && (
+          <>
+            Interview:{' '}
+            <Link to={`/interviews/${evidence.interview.id}`}>
+              {evidence.interview.label}
+            </Link>
+            {evidence.interview.sublabel ? ` — ${evidence.interview.sublabel}` : ''}
+          </>
+        )}
+        {!evidence.interview && evidence.feedback_record && (
+          <>Feedback source: <Link to="/feedback">{evidence.feedback_record.label}</Link></>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export function EvidenceCard({
   evidence,
   showContext = true,
   actions,
+  footer,
 }: {
   evidence: Evidence
   showContext?: boolean
   actions?: ReactNode
+  footer?: ReactNode
 }) {
   const isQuote = evidence.evidence_type === 'verbatim_quote' || evidence.evidence_type === 'contradictory_evidence'
   const isInterpretation = evidence.evidence_type === 'researcher_interpretation'
@@ -57,7 +132,7 @@ export function EvidenceCard({
 
       {evidence.interpretation && !isInterpretation && (
         <div className="interpretation-block">
-          <span className="label">Researcher interpretation</span>
+          <span className="label">Researcher interpretation — separate from the quote</span>
           <span style={{ fontSize: 12.5 }}>{evidence.interpretation}</span>
         </div>
       )}
@@ -77,19 +152,7 @@ export function EvidenceCard({
           {evidence.provenance_warning}
         </div>
       ) : (
-        <div className="provenance-block">
-          <span className="label">
-            <BadgeCheck size={11} style={{ marginRight: 3 }} /> Provenance
-          </span>
-          {evidence.provenance}
-          {evidence.interview && (
-            <>
-              {' · '}
-              <Link to={`/interviews/${evidence.interview.id}`}>{evidence.interview.label}</Link>
-              {evidence.interview.sublabel ? ` — ${evidence.interview.sublabel}` : ''}
-            </>
-          )}
-        </div>
+        <EvidenceSource evidence={evidence} />
       )}
 
       <div className="row-between" style={{ gap: 10 }}>
@@ -100,13 +163,15 @@ export function EvidenceCard({
               {` · ${SEGMENT_LABELS[evidence.segment]}`}
             </>
           ) : (
-            'No participant attribution recorded'
+            'Unattributed'
           )}
           {` · captured ${formatDate(evidence.captured_at)}`}
           {evidence.captured_by ? ` by ${evidence.captured_by.label}` : ''}
         </div>
         {actions}
       </div>
+
+      {footer}
 
       {evidence.insight_links.length > 0 && (
         <div className="tag-row">

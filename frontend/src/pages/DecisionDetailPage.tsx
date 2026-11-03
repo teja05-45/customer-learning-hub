@@ -11,6 +11,7 @@ import type {
   BusinessAction,
   DecisionDetail,
   DecisionStatus,
+  DecisionTraceability,
   EvidenceListResponse,
   InsightListResponse,
   InsightStatus,
@@ -39,6 +40,7 @@ import {
   formatDateTime,
   relativeTime,
   titleCase,
+  truncate,
 } from '../utils/format'
 
 const ACTION_STATUSES: ActionStatus[] = ['not_started', 'in_progress', 'completed', 'blocked']
@@ -79,8 +81,15 @@ export function DecisionDetailPage() {
     enabled: linkOpen,
   })
 
+  const traceability = useQuery({
+    queryKey: ['decision-traceability', decisionId],
+    queryFn: () => api.get<DecisionTraceability>(`/decisions/${decisionId}/traceability`),
+    enabled: Boolean(decisionId),
+  })
+
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['decision', decisionId] })
+    void queryClient.invalidateQueries({ queryKey: ['decision-traceability', decisionId] })
     void queryClient.invalidateQueries({ queryKey: ['decisions'] })
     void queryClient.invalidateQueries({ queryKey: ['actions'] })
     void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
@@ -283,6 +292,90 @@ export function DecisionDetailPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Reasoning chain back to the customer"
+            subtitle="Walk backwards from this decision to the words that informed it"
+          >
+            {traceability.isLoading && <LoadingBlock rows={3} label="Loading traceability…" />}
+            {traceability.error && (
+              <ErrorState
+                message={(traceability.error as Error).message}
+                onRetry={() => traceability.refetch()}
+              />
+            )}
+            {traceability.data && (
+              <div className="stack stack-3">
+                <ol className="timeline" style={{ margin: 0, paddingLeft: 0, listStyle: 'none' }}>
+                  {traceability.data.chain.map((step, index) => (
+                    <li className="timeline-item" key={`${step}-${index}`}>
+                      <span className={`timeline-dot${index === 0 ? ' current' : ''}`} />
+                      <div style={{ fontSize: 12.5 }}>{step}</div>
+                    </li>
+                  ))}
+                </ol>
+
+                {traceability.data.insights.map((item) => (
+                  <div key={item.insight.id} className="card-surface" style={{ padding: 11, boxShadow: 'none' }}>
+                    <Link to={`/insights/${item.insight.id}`} className="table-link">
+                      {item.insight.title}
+                    </Link>
+                    <div className="definition mt-1">
+                      {item.support_count} supporting · {item.contradiction_count} contradictory ·{' '}
+                      {item.context_count} contextual
+                    </div>
+                    <div className="tag-row mt-2">
+                      {item.evidence.map((evidenceItem) => (
+                        <Link
+                          key={evidenceItem.id}
+                          to={`/evidence/${evidenceItem.id}`}
+                          className="pill pill-outline"
+                        >
+                          {evidenceItem.code} · “{truncate(evidenceItem.content, 60)}”
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {traceability.data.direct_evidence.length > 0 && (
+                  <div>
+                    <div className="meta-label mb-1">Evidence linked directly to this decision</div>
+                    <div className="tag-row">
+                      {traceability.data.direct_evidence.map((item) => (
+                        <Link key={item.id} to={`/evidence/${item.id}`} className="pill pill-outline">
+                          {item.code}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {traceability.data.escalated_contradictions.length > 0 && (
+                  <div>
+                    <div className="meta-label mb-1">Contradictory evidence carried through</div>
+                    <div className="stack stack-2">
+                      {traceability.data.escalated_contradictions.map((item) => (
+                        <EvidenceCard key={item.id} evidence={item} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {traceability.data.gaps.length > 0 ? (
+                  <Notice tone="warning" title="Gaps in the chain">
+                    <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
+                      {traceability.data.gaps.map((gap) => (
+                        <li key={gap}>{gap}</li>
+                      ))}
+                    </ul>
+                  </Notice>
+                ) : (
+                  <Notice tone="success">Every step in the chain is populated for this decision.</Notice>
+                )}
               </div>
             )}
           </SectionCard>

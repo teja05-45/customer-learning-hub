@@ -5,7 +5,7 @@ import { ArrowLeft, ExternalLink, Pencil, Trash2 } from 'lucide-react'
 import { Modal } from 'react-bootstrap'
 import { api } from '../services/api'
 import { useToast } from '../app/ToastProvider'
-import type { Evidence } from '../types'
+import type { Evidence, EvidenceInsightsResponse } from '../types'
 import {
   ErrorState,
   LoadingBlock,
@@ -17,7 +17,14 @@ import {
 } from '../components/ui'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { EvidenceCard } from '../components/EvidenceCard'
-import { SEGMENT_LABELS, formatDateTime, titleCase } from '../utils/format'
+import {
+  CLASSIFICATION_LABELS,
+  CLASSIFICATION_TONE,
+  CONFIDENCE_TONE,
+  SEGMENT_LABELS,
+  formatDateTime,
+  titleCase,
+} from '../utils/format'
 
 export function EvidenceDetailPage() {
   const { evidenceId = '' } = useParams()
@@ -31,6 +38,12 @@ export function EvidenceDetailPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['evidence-item', evidenceId],
     queryFn: () => api.get<Evidence>(`/evidence/${evidenceId}`),
+    enabled: Boolean(evidenceId),
+  })
+
+  const insightLinks = useQuery({
+    queryKey: ['evidence-insights', evidenceId],
+    queryFn: () => api.get<EvidenceInsightsResponse>(`/evidence/${evidenceId}/insights`),
     enabled: Boolean(evidenceId),
   })
 
@@ -137,6 +150,75 @@ export function EvidenceDetailPage() {
         <div className="stack stack-3">
           <EvidenceCard evidence={data} />
 
+          <SectionCard
+            title="Insights that use this evidence"
+            subtitle="One quote can support one finding, contradict another and only add context to a third. The classification belongs to each relationship, not to the quote."
+          >
+            {insightLinks.isLoading && <LoadingBlock rows={3} label="Loading linked insights…" />}
+            {insightLinks.error && (
+              <ErrorState
+                message={(insightLinks.error as Error).message}
+                onRetry={() => insightLinks.refetch()}
+              />
+            )}
+            {insightLinks.data && insightLinks.data.total === 0 && (
+              <Notice tone="warning">
+                This evidence is not linked to any insight yet. That is fine while you are still collecting, but an
+                unlinked quote will not reach a decision on its own.
+              </Notice>
+            )}
+            {insightLinks.data && insightLinks.data.total > 0 && (
+              <div className="stack stack-3">
+                {(['supporting', 'contradictory', 'contextual'] as const).map((classification) => {
+                  const items = insightLinks.data?.[classification] ?? []
+                  if (items.length === 0) return null
+                  return (
+                    <div key={classification}>
+                      <div className="inline mb-2" style={{ gap: 6 }}>
+                        <Pill tone={CLASSIFICATION_TONE[classification]}>
+                          {CLASSIFICATION_LABELS[classification]}
+                        </Pill>
+                        <span className="definition">{items.length} insight(s)</span>
+                      </div>
+                      <div className="stack stack-2">
+                        {items.map((link) => (
+                          <div
+                            key={link.relationship_id}
+                            className="card-surface"
+                            style={{ padding: 11, boxShadow: 'none' }}
+                          >
+                            <div className="row-between" style={{ alignItems: 'flex-start' }}>
+                              <Link to={`/insights/${link.insight.id}`} className="table-link">
+                                {link.insight.title}
+                              </Link>
+                              {link.confidence && (
+                                <Pill tone={CONFIDENCE_TONE[link.confidence]}>
+                                  Researcher confidence: {titleCase(link.confidence)}
+                                </Pill>
+                              )}
+                            </div>
+                            <div className="definition mt-1">
+                              {link.insight.code} · {link.insight.evidence_count} evidence item(s) ·{' '}
+                              {titleCase(link.insight.status)}
+                            </div>
+                            <div className="mt-2">
+                              <span className="meta-label">Why this classification</span>
+                              <div style={{ fontSize: 12.5 }}>{link.rationale || 'No rationale recorded.'}</div>
+                            </div>
+                            <div className="definition mt-1">
+                              Judged by {link.created_by?.label ?? 'an unknown researcher'} ·{' '}
+                              {formatDateTime(link.created_at)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </SectionCard>
+
           <SectionCard title="What this item does and does not support">
             <div className="stack stack-2">
               <div className="definition">
@@ -148,23 +230,12 @@ export function EvidenceDetailPage() {
                 Confidence is a judgement about this item, not a statistical statement. A single high-confidence quote
                 is still one person's account.
               </div>
-              {data.insight_links.length > 0 ? (
-                <div>
-                  <div className="meta-label mb-1">Used in</div>
-                  <div className="tag-row">
-                    {data.insight_links.map((link) => (
-                      <Link key={link.insight_id} to={`/insights/${link.insight_id}`} className="pill pill-outline">
-                        {link.insight_code} · {titleCase(link.role)} — {link.insight_title}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <Notice tone="warning">
-                  This evidence is not linked to any insight yet. That is fine while you are still collecting, but an
-                  unlinked quote will not reach a decision on its own.
-                </Notice>
-              )}
+              <div className="definition">
+                {insightLinks.data
+                  ? `Linked to ${insightLinks.data.total} insight(s): ${insightLinks.data.supporting.length} supporting, ${insightLinks.data.contradictory.length} contradictory, ${insightLinks.data.contextual.length} contextual.`
+                  : 'Checking which insights use this item…'}
+              </div>
+              <div className="definition">{insightLinks.data?.statement_note}</div>
             </div>
           </SectionCard>
         </div>

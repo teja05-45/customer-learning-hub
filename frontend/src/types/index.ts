@@ -43,7 +43,7 @@ export type BusinessFunction =
   | 'customer_experience'
   | 'operations'
   | 'executive'
-export type EvidenceRole = 'supporting' | 'contradictory'
+export type EvidenceRole = 'supporting' | 'contradictory' | 'contextual'
 export type UserRole = 'ceo' | 'researcher' | 'business_owner' | 'cx' | 'admin'
 export type FeedbackSourceType =
   | 'interview'
@@ -269,6 +269,7 @@ export interface Evidence {
   id: string
   code: string
   interview_id: string | null
+  feedback_record_id: string | null
   project_id: string
   participant_id: string | null
   evidence_type: EvidenceType
@@ -282,11 +283,19 @@ export interface Evidence {
   review_status: ReviewStatus
   captured_at: string
   captured_by_id: string | null
+  source_type: FeedbackSourceType | 'interview' | null
+  collection_method: CollectionMethod | null
+  research_depth: ResearchDepth | null
+  source_reference: string | null
+  verification_state: VerificationStatus | null
+  collected_at: string | null
+  is_attributed: boolean
   is_verified_source: boolean
   provenance_warning: string | null
   participant?: Ref | null
   captured_by?: Ref | null
   interview?: Ref | null
+  feedback_record?: Ref | null
   project?: Ref | null
   insight_links: { insight_id: string; insight_code: string; insight_title: string; role: EvidenceRole }[]
 }
@@ -358,6 +367,7 @@ export interface InsightSummary {
   project?: Ref | null
   supporting_count: number
   contradictory_count: number
+  contextual_count: number
   evidence_count: number
   decision_count: number
   reuse_flag: boolean
@@ -617,6 +627,128 @@ export interface FeedbackListResponse {
   source_counts: Record<string, number>
   unverified_count: number
   unattributed_count: number
+}
+
+export interface InsightEvidenceLink {
+  relationship_id: string
+  classification: EvidenceRole
+  rationale: string
+  confidence: Confidence | null
+  tags: string[]
+  note: string
+  created_by?: Ref | null
+  created_at: string
+  updated_at: string
+  evidence: Evidence
+}
+
+export interface EvidenceGroup {
+  items: InsightEvidenceLink[]
+  count: number
+}
+
+export interface InsightEvidenceResponse {
+  insight_id: string
+  insight_code: string
+  insight_title: string
+  project_id: string | null
+  supporting: EvidenceGroup
+  contradictory: EvidenceGroup
+  contextual: EvidenceGroup
+  total: number
+}
+
+export interface TraceabilityQuality {
+  total: number
+  supporting: number
+  contradictory: number
+  contextual: number
+  verified: number
+  unverified: number
+  distinct_source_types: number
+  unattributed: number
+  unsubstantiated: boolean
+  has_conflict: boolean
+  confidence_definition: string
+}
+
+export interface TraceabilityAction {
+  id: string
+  code: string
+  title: string
+  status: ActionStatus
+  owner?: Ref | null
+  due_date: string | null
+}
+
+export interface TraceabilityDecision {
+  id: string
+  code: string
+  title: string
+  status: DecisionStatus
+  business_function: BusinessFunction
+  rationale: string
+  decision_date: string | null
+  evidence_sufficient: boolean | null
+  actions: TraceabilityAction[]
+}
+
+export interface InsightTraceability {
+  insight: InsightSummary
+  evidence: InsightEvidenceResponse
+  quality: TraceabilityQuality
+  decisions: TraceabilityDecision[]
+  warnings: string[]
+  chain_note: string
+}
+
+export interface EvidenceInsightLink {
+  relationship_id: string
+  classification: EvidenceRole
+  rationale: string
+  confidence: Confidence | null
+  tags: string[]
+  created_by?: Ref | null
+  created_at: string
+  updated_at: string
+  insight: InsightSummary
+}
+
+export interface EvidenceInsightsResponse {
+  evidence_id: string
+  evidence_code: string
+  supporting: EvidenceInsightLink[]
+  contradictory: EvidenceInsightLink[]
+  contextual: EvidenceInsightLink[]
+  total: number
+  unattributed: boolean
+  statement_note: string
+}
+
+export interface DecisionTraceabilityInsight {
+  insight: InsightSummary
+  support_count: number
+  contradiction_count: number
+  context_count: number
+  evidence: Evidence[]
+}
+
+export interface DecisionTraceability {
+  decision_id: string
+  decision_code: string
+  decision_title: string
+  insights: DecisionTraceabilityInsight[]
+  direct_evidence: Evidence[]
+  actions: TraceabilityAction[]
+  escalated_contradictions: Evidence[]
+  gaps: string[]
+  chain: string[]
+  provenance_note: string
+}
+
+export interface RelationshipWriteResponse {
+  relationship: InsightEvidenceLink
+  message: string
 }
 
 export interface Health {

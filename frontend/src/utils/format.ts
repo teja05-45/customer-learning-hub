@@ -5,6 +5,7 @@ import type {
   Confidence,
   DecisionStatus,
   Eligibility,
+  EvidenceRole,
   EvidenceType,
   FeedbackSourceType,
   InsightStatus,
@@ -264,6 +265,20 @@ export const COLLECTION_METHOD_LABELS: Record<CollectionMethod, string> = {
   product_review: 'Product review',
   imported_feedback: 'Imported feedback',
   manual_entry: 'Manual entry',
+}
+
+// The classification belongs to the link, not the evidence: one quote can
+// support one finding, contradict another and only add context to a third.
+export const CLASSIFICATION_LABELS: Record<EvidenceRole, string> = {
+  supporting: 'Supporting',
+  contradictory: 'Contradictory',
+  contextual: 'Contextual',
+}
+
+export const CLASSIFICATION_TONE: Record<EvidenceRole, Tone> = {
+  supporting: 'green',
+  contradictory: 'red',
+  contextual: 'outline',
 }
 
 export const VERIFICATION_LABELS: Record<VerificationStatus, string> = {

@@ -24,6 +24,7 @@ const EXPORTS = [
   { entity: 'evidence', label: 'Evidence' },
   { entity: 'feedback', label: 'Feedback sources' },
   { entity: 'insights', label: 'Insights' },
+  { entity: 'traceability', label: 'Evidence traceability' },
   { entity: 'decisions', label: 'Decisions' },
   { entity: 'actions', label: 'Actions' },
 ]

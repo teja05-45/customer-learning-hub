@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Modal } from 'react-bootstrap'
-import { BadgeCheck, MessageSquareQuote, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { BadgeCheck, FilePlus2, MessageSquareQuote, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { api, toQuery } from '../services/api'
 import { useToast } from '../app/ToastProvider'
 import type {
   CollectionMethod,
+  Evidence,
   FeedbackListResponse,
   FeedbackSource,
   FeedbackSourceType,
@@ -196,6 +197,26 @@ export function FeedbackPage() {
     },
     onError: (error) =>
       toast.push({ title: 'Could not verify the source', message: (error as Error).message, variant: 'error' }),
+  })
+
+  const createEvidence = useMutation({
+    mutationFn: (item: FeedbackSource) => api.post<Evidence>(`/feedback/${item.id}/evidence`),
+    onSuccess: (evidence) => {
+      void queryClient.invalidateQueries({ queryKey: ['feedback'] })
+      void queryClient.invalidateQueries({ queryKey: ['evidence'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.push({
+        title: `Evidence ${evidence.code} created`,
+        message: 'The customer statement was copied unchanged. Open an insight to link it.',
+        variant: 'success',
+      })
+    },
+    onError: (error) =>
+      toast.push({
+        title: 'Could not create evidence',
+        message: (error as Error).message,
+        variant: 'error',
+      }),
   })
 
   const remove = useMutation({
@@ -443,6 +464,14 @@ export function FeedbackPage() {
                       {item.depth_note}
                     </div>
                     <div className="inline" style={{ gap: 6 }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        disabled={createEvidence.isPending}
+                        onClick={() => createEvidence.mutate(item)}
+                      >
+                        <FilePlus2 size={12} /> Create evidence
+                      </button>
                       <button
                         type="button"
                         className="btn btn-outline-secondary btn-sm"
