@@ -18,6 +18,7 @@ from app.models import (
     Evidence,
     FeedbackRecord,
     Insight,
+    InsightEvidence,
     Interview,
     OrganizationSetting,
     Participant,
@@ -42,6 +43,7 @@ from app.services.activity import log_activity
 from app.services.analytics import build_analytics
 from app.services.dashboard import build_dashboard
 from app.services.search import search
+from app.services.serializers import evidence_provenance
 
 router = APIRouter()
 
@@ -267,6 +269,71 @@ def _csv_value(row, field: str):  # noqa: ANN001 - SQLAlchemy row of mixed types
     return _csv_safe(value)
 
 
+TRACEABILITY_FIELDS = [
+    "project",
+    "insight_code",
+    "insight",
+    "insight_description",
+    "evidence_code",
+    "customer_statement",
+    "researcher_interpretation",
+    "source_type",
+    "collection_method",
+    "research_depth",
+    "verification_state",
+    "attribution",
+    "relationship_classification",
+    "researcher_rationale",
+    "confidence",
+    "created_by",
+    "created_at",
+]
+
+
+def _traceability_records(db: Session) -> list[dict]:
+    """One row per insight-evidence relationship, in a stable order.
+
+    The original customer statement is exported exactly as stored. Attribution
+    is a participant code or the explicit word ``unattributed``; no contact
+    detail is included because none is stored.
+    """
+    links = db.execute(
+        select(InsightEvidence, Insight, Evidence)
+        .join(Insight, Insight.id == InsightEvidence.insight_id)
+        .join(Evidence, Evidence.id == InsightEvidence.evidence_id)
+        .order_by(Insight.code.asc(), InsightEvidence.role.asc(), Evidence.code.asc())
+    ).all()
+
+    rows: list[dict] = []
+    for link, insight, evidence in links:
+        project = db.get(ResearchProject, insight.project_id) if insight.project_id else None
+        participant = db.get(Participant, evidence.participant_id) if evidence.participant_id else None
+        creator = db.get(User, link.created_by_id) if link.created_by_id else None
+        provenance = evidence_provenance(db, evidence)
+        rows.append(
+            {
+                "project": project.name if project else "",
+                "insight_code": insight.code,
+                "insight": insight.title,
+                "insight_description": insight.summary,
+                "evidence_code": evidence.code,
+                "customer_statement": evidence.content,
+                "researcher_interpretation": evidence.interpretation,
+                "source_type": provenance["source_type"] or "",
+                "collection_method": provenance["collection_method"] or "",
+                "research_depth": provenance["research_depth"] or "",
+                "verification_state": provenance["verification_state"] or "",
+                "attribution": participant.code if participant else "unattributed",
+                "relationship_classification": link.role,
+                "researcher_rationale": link.rationale or link.note or "",
+                "confidence": link.confidence or "",
+                "created_by": creator.name if creator else "",
+                "created_at": link.created_at.isoformat() if link.created_at else "",
+            }
+        )
+    return rows
+
+
 @router.get("/exports/{entity}.csv", tags=["exports"])
 def export_csv(entity: str, db: Session = Depends(get_db), actor: User | None = Depends(get_actor)) -> Response:
     """Download one entity as CSV.
@@ -277,17 +344,21 @@ def export_csv(entity: str, db: Session = Depends(get_db), actor: User | None = 
     (the export specs list only approved fields), and an empty dataset returns a
     header-only file rather than an error.
     """
-    if entity not in EXPORT_SPECS:
+    if entity not in EXPORT_SPECS and entity != "traceability":
         raise RuleViolationError(
-            "Unknown export.", details={"available": sorted(EXPORT_SPECS.keys())}
+            "Unknown export.",
+            details={"available": sorted([*EXPORT_SPECS.keys(), "traceability"])},
         )
     if actor is None or not actor.is_active:
         # Defence in depth: the middleware already rejects anonymous requests.
         raise UnauthorizedError("Sign in to export records.")
 
+    origin = "synthetic" if app_settings.demo_mode else "live"
+    if entity == "traceability":
+        return _traceability_export(db, actor, origin)
+
     model, fields = EXPORT_SPECS[entity]
     rows = db.execute(select(model)).scalars().all()
-    origin = "synthetic" if app_settings.demo_mode else "live"
 
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -320,6 +391,48 @@ def export_csv(entity: str, db: Session = Depends(get_db), actor: User | None = 
                 "synthetic-demo-data" if origin == "synthetic" else "live-production-data"
             ),
             "X-Row-Count": str(len(rows)),
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+def _traceability_export(db: Session, actor: User, origin: str) -> Response:
+    records = _traceability_records(db)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([*TRACEABILITY_FIELDS, "data_origin", "exported_at"])
+    timestamp = datetime.now(timezone.utc).isoformat()
+    for record in records:
+        writer.writerow(
+            [
+                *(_csv_safe(record[field]) for field in TRACEABILITY_FIELDS),
+                origin,
+                timestamp,
+            ]
+        )
+
+    log_activity(
+        db,
+        entity_type="export",
+        entity_id=None,
+        entity_label="traceability CSV",
+        verb="exported",
+        summary=f"{actor.name} exported {len(records)} evidence-to-insight traceability row(s) as CSV.",
+        actor_id=actor.id,
+    )
+    db.commit()
+
+    filename = f"everyday-goods-traceability-{origin}.csv"
+    return Response(
+        content="\ufeff" + buffer.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Type": "text/csv; charset=utf-8",
+            "X-Data-Origin": (
+                "synthetic-demo-data" if origin == "synthetic" else "live-production-data"
+            ),
+            "X-Row-Count": str(len(records)),
             "Cache-Control": "no-store",
         },
     )
