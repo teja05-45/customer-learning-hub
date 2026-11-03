@@ -1,49 +1,77 @@
 # Design
 
-The existing professional light-theme identity is retained. This document records the tokens
-and the interaction rules the implementation follows.
+The product uses the **Executive Emerald** design system. The source of truth is
+`design-system/customer-learning-hub/MASTER.md`; the implementation is split between
+`frontend/src/styles/app.css` (base component rules) and `frontend/src/styles/emerald.css`
+(Executive Emerald tokens and refinements, imported after the base sheet). Pages consume tokens;
+they do not define their own palette.
 
 ## Palette
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Primary | `#2563EB` | Primary actions, active navigation, selected filters |
-| Navy | `#172554` | Sidebar and high-emphasis headings |
-| Background | `#F8FAFC` | Page background |
-| Surface | `#FFFFFF` | Cards, tables, modals |
-| Text | `#0F172A` | Primary text |
-| Secondary text | `#64748B` | Metadata, definitions |
-| Border | `#E2E8F0` | Card and table dividers |
-| Success | `#16A34A` | Completed, validated, verified |
-| Warning | `#D97706` | Thin evidence, sample warnings, overdue |
-| Danger | `#DC2626` | Blocked, rejected, destructive actions |
+| Primary | `#176B52` | Primary actions, links, verified state, active navigation |
+| Deep primary / chrome | `#124B3B` / `#103F32` | Sidebar, login aside, pressed primary |
+| Primary wash | `#EAF2ED` | Selected navigation, quiet emerald surfaces |
+| Canvas | `#F7F5EF` | Page background |
+| Surface | `#FFFFFF` | Cards, tables, dialogs |
+| Text | `#252923` | Primary text |
+| Secondary text | `#5F655C` | Descriptions, metadata (5.5:1 on canvas) |
+| Tertiary text | `#6A6F65` | Definitions, captions (5.1:1 on white) |
+| Border | `#E7E5DC` | Dividers and card edges |
+| Gold | `#D6A84F` / ink `#7A5210` | Current-location marker, provenance, attention |
+| Terracotta | `#D97757` / text `#B44A32` | Contradiction and destructive emphasis |
+| Success | `#1D7A57` | Completed, validated |
+| Warning | `#B57F2A` | Thin evidence, overdue, sample warnings |
+| Info | `#2F6B7A` | Observation and neutral information |
 
-Tokens are defined once in `frontend/src/styles/app.css` as CSS custom properties
-(`--clh-primary`, `--clh-text`, …). Components reference tokens rather than raw hex values,
-with chart colours passed to Recharts from the same palette family.
+The supplied secondary tone `#74796F` measures ≈4.46:1 on white and is therefore not used for
+normal text; `#6A6F65` replaces it for text while the original remains available as a decorative
+tone. Gold is never used for small text on light surfaces — `#7A5210` is the text form. These
+contrast decisions are documented in the master design system and checked by axe in
+`frontend/e2e/a11y.spec.ts`.
 
 ## Typography and spacing
 
-- System UI stack; page title 24–26px/650, card title 13.5px/650, body 13px, definition 11.5px.
-- Spacing follows a 4px scale exposed as utility classes (`mt-1`…`mt-3`, `gap-2`, `stack-2`).
-- Numbers in tables use a monospace class (`mono`) so columns align.
-- No gradients, no decorative animation. The only motion is the loading spinner and skeleton
-  shimmer, both of which communicate state.
+- Page and brand titles use a serif display stack (`ui-serif`, Iowan Old Style, Palatino,
+  Georgia); the working UI uses the system sans stack. Serif never appears in tables, buttons,
+  labels or numbers.
+- Page title 30 px/600 with −0.018em tracking, collapsing to 24 px below 620 px. Card title
+  13.5 px/640, body 14 px, table body 13 px, definitions 11.5 px.
+- 4 px spacing scale; page padding 26/30 px desktop and 18/14 px below 992 px.
+- Radii: 5 px controls, 9 px cards, 12 px dialogs. Nothing above 12 px except status pills.
+- Elevation is limited to a 1 px resting shadow and a 30 px overlay shadow. No coloured shadows
+  and no gradients except the single login wash and the chart area fill.
 
 ## Layout
 
-- Fixed sidebar (collapsible on narrow screens) plus a content column capped at a readable
-  width; tables scroll horizontally inside `.table-wrap` rather than widening the page.
+- 260 px chrome rail, 64 px top bar, content capped at 1440 px.
+- The rail collapses to an off-canvas drawer below 992 px; the top bar exposes the menu and
+  search controls, and tables scroll inside `.table-wrap` rather than widening the page.
 - `grid-4` stat rows, `grid-3` metric cards, `grid-2` paired panels, `grid-sidebar` main +
-  context column. These collapse to a single column under the Bootstrap `lg` breakpoint.
-- Every primary screen has a page header with title, one-sentence purpose and actions.
+  context column; all collapse to one column at their breakpoints.
+- Every screen opens with a serif title, one-sentence purpose and its actions.
+
+## Motion
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `--clh-motion-fast` | 140 ms | Hover, press, nav, table rows |
+| `--clh-motion` | 200 ms | Dropdowns, tabs, cards changing state |
+| `--clh-motion-panel` | 260 ms | Dialogs, command palette, drawers |
+| `--clh-ease` | `cubic-bezier(.2,.7,.3,1)` | All entrances and state changes |
+
+Only opacity, transform, background and border colour animate. The sidebar drawer, command
+palette, modal, toasts and row hover are the animated surfaces. A global
+`prefers-reduced-motion: reduce` block collapses durations and disables the skeleton shimmer.
 
 ## Components
 
 `components/ui.tsx` provides `Pill`, `SectionCard`, `PageHeader`, `StatCard`, `EmptyState`,
 `ErrorState`, `LoadingBlock`, `TableSkeleton`, `Notice`, `Spinner`, `HonestyNote`, `MetaItem`
-and `ProgressBar`. `EvidenceCard` renders customer words and researcher interpretation in
-visually distinct blocks. `ConfirmDialog` gates destructive actions.
+and `ProgressBar`. `EvidenceCard` puts the customer's statement and the researcher's
+interpretation in separate labelled blocks with different surfaces. `ConfirmDialog` gates
+destructive actions and supports a typed confirmation phrase.
 
 ## Required page states
 
@@ -52,32 +80,51 @@ visually distinct blocks. `ConfirmDialog` gates destructive actions.
 | Loading | `TableSkeleton` for lists, `LoadingBlock` for detail panels |
 | Empty | `EmptyState` with a reason and, where useful, the next action |
 | Error | `ErrorState` with the server message and a Retry button |
-| Refreshing | Inline "Refreshing…" label; previous data remains visible |
+| Refreshing | Inline "Refreshing…" label; previous data stays visible |
 | Success | Toast; no `alert()` anywhere in the codebase |
-| Destructive | `ConfirmDialog` naming the consequence, never a browser confirm |
+| Destructive | `ConfirmDialog` naming the consequence |
 
 ## Forms
 
-- Labels are always visible; required fields carry a `*` and the API validates again.
-- Server field errors are displayed next to the field via `fieldErrors()`.
-- Selects use controlled state; date inputs use native `date`/`datetime-local` controls.
-- Modal footers put the primary action last and disable it while a request is in flight.
+- Labels are always visible; required fields carry `*` and the API validates again.
+- Server field errors render next to the field via `fieldErrors()`.
+- Selects are controlled; dates use native inputs.
+- Primary action is last in a modal footer and disabled while a request is in flight.
 
 ## Honesty as a design rule
 
-Warnings are visible, not hidden in tooltips: sample-size warnings, thin evidence,
+Warnings stay visible rather than hiding in tooltips: sample-size warnings, thin evidence,
 contradictory evidence, unverified provenance, pending-baseline metrics and "Not measured"
-values all have explicit visual treatment. The demo banner is persistent. Synthetic data is
-labelled on screen and in every CSV export header/row.
+values all have explicit treatment. The demo banner is persistent, and synthetic data is labelled
+on screen and in every CSV row.
 
 ## Accessibility
 
 - Skip link to `#main`; the main landmark is focusable.
 - The command palette is `role="dialog" aria-modal="true"` with a focus trap, Escape to close
   and focus restoration to the trigger.
-- Icon-only buttons have `aria-label`s; charts expose an accessible name and image role.
-- Colour is never the only signal: statuses also carry text labels.
-- Target: no serious or critical axe violations on primary screens (enforced in
-  `frontend/e2e/a11y.spec.ts`).
+- Icon-only buttons have `aria-label`s; charts expose accessible names.
+- Status is never carried by colour alone.
+- Target: no serious or critical axe violations on primary screens, enforced in
+  `frontend/e2e/a11y.spec.ts`.
 
-See `08-design-system.md` and `14-accessibility.md` for the original rationale.
+## Tooling status
+
+The UI UX Pro Max CLI was not installed in this environment, so no skill-generated files were
+read and no generated design system was consumed:
+
+```bash
+npm install -g ui-ux-pro-max-cli
+uipro init --ai claude
+```
+
+The 21st MCP server was not connected and no API key was supplied, so no component was
+searched, generated or imported from 21st.dev:
+
+```bash
+npx @21st-dev/cli@latest init --client claude
+```
+
+The interface is built from the repository's existing React primitives, adapted to the tokens
+above. This document and the master design system describe what is actually implemented, not
+what the tools might have produced.
