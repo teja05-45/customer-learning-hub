@@ -619,6 +619,57 @@ a:hover {
   box-shadow: 0 6px 18px rgba(23, 107, 82, 0.12);
 }
 
+/* ------------------------------------------------------------- feedback */
+.feedback-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 15px 17px;
+  border: 1px solid var(--clh-border);
+  border-left: 3px solid var(--clh-primary);
+  border-radius: var(--clh-radius);
+  background: var(--clh-surface);
+  transition: box-shadow var(--clh-motion) var(--clh-ease), border-color var(--clh-motion) var(--clh-ease);
+}
+
+.feedback-card:hover {
+  box-shadow: var(--clh-shadow);
+}
+
+.feedback-card.source-short_survey,
+.feedback-card.source-structured_form {
+  border-left-color: var(--clh-gold);
+}
+
+.feedback-card.source-customer_support {
+  border-left-color: var(--clh-info);
+}
+
+.feedback-card.source-product_review {
+  border-left-color: var(--clh-purple);
+}
+
+.feedback-card.source-manual_entry,
+.feedback-card.source-csv_import {
+  border-left-color: var(--clh-text-tertiary);
+}
+
+.feedback-source-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 11.5px;
+  color: var(--clh-text-secondary);
+  line-height: 1.5;
+}
+
+.feedback-quote {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--clh-text);
+}
+
 /* ------------------------------------------------------------------ motion */
 @keyframes clh-fade {
   from {

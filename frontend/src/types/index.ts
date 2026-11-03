@@ -45,6 +45,28 @@ export type BusinessFunction =
   | 'executive'
 export type EvidenceRole = 'supporting' | 'contradictory'
 export type UserRole = 'ceo' | 'researcher' | 'business_owner' | 'cx' | 'admin'
+export type FeedbackSourceType =
+  | 'interview'
+  | 'written_feedback'
+  | 'structured_form'
+  | 'short_survey'
+  | 'customer_support'
+  | 'product_review'
+  | 'manual_entry'
+  | 'csv_import'
+export type CollectionMethod =
+  | 'in_person_interview'
+  | 'video_interview'
+  | 'phone_interview'
+  | 'written_feedback'
+  | 'structured_form'
+  | 'short_survey'
+  | 'support_feedback'
+  | 'product_review'
+  | 'imported_feedback'
+  | 'manual_entry'
+export type VerificationStatus = 'unverified' | 'needs_review' | 'verified'
+export type ResearchDepth = 'deep' | 'medium' | 'limited' | 'context'
 
 export interface Ref {
   id: string
@@ -560,6 +582,41 @@ export interface OrgSettings {
   retention_months: number
   show_demo_banner: boolean
   updated_at: string
+}
+
+export interface FeedbackSource {
+  id: string
+  code: string
+  project_id: string
+  participant_id: string | null
+  interview_id: string | null
+  source_type: FeedbackSourceType
+  collection_method: CollectionMethod
+  source_reference: string
+  collected_at: string
+  contributor: string
+  content: string
+  interpretation: string
+  context: string
+  verification_status: VerificationStatus
+  created_by_id: string | null
+  created_at: string
+  updated_at: string
+  is_attributed: boolean
+  research_depth: ResearchDepth
+  depth_note: string
+  participant?: Ref | null
+  project?: Ref | null
+  interview?: Ref | null
+  created_by?: Ref | null
+}
+
+export interface FeedbackListResponse {
+  items: FeedbackSource[]
+  total: number
+  source_counts: Record<string, number>
+  unverified_count: number
+  unattributed_count: number
 }
 
 export interface Health {

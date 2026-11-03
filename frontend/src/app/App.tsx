@@ -13,6 +13,7 @@ import { InterviewsPage } from '../pages/InterviewsPage'
 import { InterviewDetailPage } from '../pages/InterviewDetailPage'
 import { EvidencePage } from '../pages/EvidencePage'
 import { EvidenceDetailPage } from '../pages/EvidenceDetailPage'
+import { FeedbackPage } from '../pages/FeedbackPage'
 import { InsightsPage } from '../pages/InsightsPage'
 import { InsightDetailPage } from '../pages/InsightDetailPage'
 import { DecisionsPage } from '../pages/DecisionsPage'
@@ -45,6 +46,7 @@ export function App() {
         <Route path="/interviews/:interviewId" element={<InterviewDetailPage />} />
         <Route path="/evidence" element={<EvidencePage />} />
         <Route path="/evidence/:evidenceId" element={<EvidenceDetailPage />} />
+        <Route path="/feedback" element={<FeedbackPage />} />
         <Route path="/insights" element={<InsightsPage />} />
         <Route path="/insights/:insightId" element={<InsightDetailPage />} />
         <Route path="/decisions" element={<DecisionsPage />} />

@@ -1,16 +1,20 @@
 import type {
   ActionStatus,
   BusinessFunction,
+  CollectionMethod,
   Confidence,
   DecisionStatus,
   Eligibility,
   EvidenceType,
+  FeedbackSourceType,
   InsightStatus,
   InterviewStatus,
   Priority,
   ProjectStatus,
   RecruitmentStage,
+  ResearchDepth,
   Segment,
+  VerificationStatus,
 } from '../types'
 
 export type Tone = 'neutral' | 'blue' | 'green' | 'amber' | 'red' | 'purple' | 'outline'
@@ -236,6 +240,56 @@ export const EVIDENCE_TONE: Record<EvidenceType, Tone> = {
   researcher_interpretation: 'purple',
   contradictory_evidence: 'amber',
   open_question: 'outline',
+}
+
+export const FEEDBACK_SOURCE_LABELS: Record<FeedbackSourceType, string> = {
+  interview: 'Interview',
+  written_feedback: 'Written feedback',
+  structured_form: 'Structured form',
+  short_survey: 'Short survey',
+  customer_support: 'Support feedback',
+  product_review: 'Product review',
+  manual_entry: 'Manual entry',
+  csv_import: 'CSV import',
+}
+
+export const COLLECTION_METHOD_LABELS: Record<CollectionMethod, string> = {
+  in_person_interview: 'In-person interview',
+  video_interview: 'Video interview',
+  phone_interview: 'Phone interview',
+  written_feedback: 'Written feedback',
+  structured_form: 'Structured form',
+  short_survey: 'Short survey',
+  support_feedback: 'Support feedback',
+  product_review: 'Product review',
+  imported_feedback: 'Imported feedback',
+  manual_entry: 'Manual entry',
+}
+
+export const VERIFICATION_LABELS: Record<VerificationStatus, string> = {
+  unverified: 'Unverified',
+  needs_review: 'Needs review',
+  verified: 'Source verified',
+}
+
+export const VERIFICATION_TONE: Record<VerificationStatus, Tone> = {
+  unverified: 'amber',
+  needs_review: 'amber',
+  verified: 'green',
+}
+
+export const DEPTH_LABELS: Record<ResearchDepth, string> = {
+  deep: 'Deep',
+  medium: 'Medium',
+  limited: 'Limited',
+  context: 'Context only',
+}
+
+export const DEPTH_TONE: Record<ResearchDepth, Tone> = {
+  deep: 'green',
+  medium: 'blue',
+  limited: 'amber',
+  context: 'outline',
 }
 
 export function initialsOf(name: string): string {

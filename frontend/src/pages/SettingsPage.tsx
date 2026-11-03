@@ -22,6 +22,7 @@ const EXPORTS = [
   { entity: 'recruitment', label: 'Recruitment records' },
   { entity: 'interviews', label: 'Interviews' },
   { entity: 'evidence', label: 'Evidence' },
+  { entity: 'feedback', label: 'Feedback sources' },
   { entity: 'insights', label: 'Insights' },
   { entity: 'decisions', label: 'Decisions' },
   { entity: 'actions', label: 'Actions' },

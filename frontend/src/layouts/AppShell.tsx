@@ -11,6 +11,7 @@ import {
   Lightbulb,
   LogOut,
   Menu,
+  MessageSquareQuote,
   Quote,
   Scale,
   Search,
@@ -33,6 +34,7 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   recruitment: 'Recruitment',
   interviews: 'Interviews',
   evidence: 'Evidence',
+  feedback: 'Feedback sources',
   insights: 'Insights library',
   decisions: 'Decisions & actions',
   actions: 'Actions',
@@ -90,6 +92,7 @@ export function AppShell() {
     { to: '/recruitment', label: 'Recruitment', icon: UserPlus },
     { to: '/interviews', label: 'Interviews', icon: CalendarDays },
     { to: '/evidence', label: 'Evidence', icon: Quote },
+    { to: '/feedback', label: 'Feedback sources', icon: MessageSquareQuote },
     {
       to: '/insights',
       label: 'Insights library',
