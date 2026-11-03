@@ -28,8 +28,11 @@ Status as delivered. "Verified" means covered by an executed check, not merely w
 | Analytics | Agreement with the dashboard | `test_dashboard_and_analytics_report_the_same_quantities` |
 | Search | Seven entity types, navigation, related research | Journey; search tests |
 | UX | Loading, empty, error, retry, toasts, confirmations, accessibility | Playwright smoke + axe |
+| UX | Executive Emerald redesign across all screens and both entry/navigation shells | `docs/design.md`, regenerated screenshots, axe |
+| UX | Responsive layout verified at 375/768/1024/1440 plus the auth screen | `responsive.spec.ts` |
+| Exports | All eight Settings downloads exercised in a browser and parsed | `exports.spec.ts` |
 | Delivery | Docker images, Compose stack, health checks, volume | Compose verification |
-| Delivery | 42 backend tests, 7 browser tests, clean typecheck/build | Final verification run |
+| Delivery | 79 backend tests, 13 browser tests, clean typecheck/build | Final verification run |
 | Docs | Product, architecture, data, API, security, operations, plan, defects | This documentation set |
 
 ## Remaining (prioritised)

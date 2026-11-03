@@ -35,18 +35,18 @@ The Playwright suite expects the API at `http://127.0.0.1:8000/api/v1` (override
 
 ## Actual results
 
-Executed on 2 November 2026 against the working tree of this release:
+Executed on 3 November 2026 against the working tree of this release:
 
 ```
 cd backend && python -m pytest -q
-79 passed, 1 warning in 49.73s
+79 passed, 1 warning in 96.47s
 ```
 
 The warning is a third-party Starlette/anyio deprecation notice, not a project failure.
 
 ```
 cd frontend && npm run typecheck     # exit 0, no output
-cd frontend && npm run build         # exit 0, built in 9.74s
+cd frontend && npm run build         # exit 0, built in 5.70s
 ```
 
 `vite build` reports one chunk-size advisory (single ~1 MB bundle). Code-splitting is a listed
@@ -66,15 +66,35 @@ cookie round-trips through Starlette's `TestClient`.
 ## Frontend verification
 
 - `tsc --noEmit` — clean.
-- `vite build` — succeeds with one chunk-size advisory.
+- `vite build` — succeeds with one chunk-size advisory (single ~1 MB bundle).
 - Playwright specs: `smoke.spec.ts` (primary screens, deep links, unknown route, API failure
-  state, skip link, command palette), `a11y.spec.ts` (axe scan of every screen), `journey.spec.ts`
-  (research-to-decision workflow), `screenshots.spec.ts` (documentation captures).
+  state, skip link, command palette), `a11y.spec.ts` (axe scan of every screen),
+  `journey.spec.ts` (research-to-decision workflow), `exports.spec.ts` (all eight Settings
+  downloads parsed as CSV), `responsive.spec.ts` (375/768/1024/1440 plus the auth screen),
+  `screenshots.spec.ts` (documentation captures).
 
-The Playwright suite was **not executed in this session**: the browser run needs both servers and
-the Docker daemon was unavailable in this environment. The last recorded result in the repository
-is 7 passing tests (`docs/STAGE_COMPLETION_REPORT.md`), and the specs were updated for cookie
-sessions. Treat the browser suite as unverified for this revision until it is run.
+```
+cd frontend && npx playwright test
+13 passed (2.1m)
+```
+
+Both servers were running for that run: FastAPI on `127.0.0.1:8000` and Vite on
+`localhost:5173`. The API was started with `DEMO_MODE=true` because the browser helpers use the
+demonstration entry; production defaults remain demo-off.
+
+### Isolated API contexts
+
+The journey and deep-link specs authenticate their API contexts explicitly. `X-Demo-User-Id` is
+ignored by the server, and a browser cookie issued on `localhost:5173` is not sent to
+`127.0.0.1:8000`; tests therefore use either a signed-in API context or a same-origin relative
+request. Neither a header nor a cross-host cookie is treated as authentication.
+
+### Redesign verification
+
+The Executive Emerald redesign was checked by `responsive.spec.ts` at four widths, by axe on every
+primary screen (no serious or critical violations) and by regenerating all screenshots. The first
+axe run caught a real contrast failure in the sidebar section labels; the token was lightened to
+`#B9CDC2` (≈6:1 on the chrome) and the suite was rerun green.
 
 ## What is deliberately not covered
 

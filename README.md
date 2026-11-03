@@ -124,7 +124,9 @@ React 18 + TypeScript (Vite) ── /api/v1 ──▶ FastAPI ── SQLAlchemy 
 - **Backend:** FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, pytest, HTTPX. Routers handle HTTP;
   `app/services/` owns metrics, search, serialisation, templates and pipeline rules.
 - **Frontend:** React 18, TypeScript, Vite, Bootstrap 5, React Router, TanStack Query,
-  React Hook Form + Zod, Recharts, Lucide.
+  React Hook Form + Zod, Recharts, Lucide. The Executive Emerald design system lives in
+  `frontend/src/styles/emerald.css`; its source of truth is
+  `design-system/customer-learning-hub/MASTER.md`.
 - **Infrastructure:** two Docker images, Compose with a persistent volume, health checks,
   nginx reverse proxy, idempotent seed.
 
@@ -140,13 +142,14 @@ backend/
   app/schemas/            Pydantic contracts
   app/seed/               synthetic demo dataset
   alembic/                migration environment and initial revision
-  tests/                  69 pytest tests, including auth and export suites
+  tests/                  79 pytest tests, including auth and export suites
 frontend/
   src/pages/              one component per screen
   src/components/         shared UI, evidence card, search, dialogs
   src/services/api.ts     typed fetch client and error normalisation
   e2e/                    Playwright smoke, accessibility, journey, screenshots
-docs/                     22 canonical documents + original discovery set
+design-system/            Executive Emerald master design system
+docs/                     28 canonical documents + original discovery set
 compose.yaml              API + nginx web app, one command
 ```
 
@@ -156,12 +159,12 @@ These commands were executed for this release:
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest -q                 # 69 passed
+.venv\Scripts\python.exe -m pytest -q                 # 79 passed
 
 cd ..\frontend
 npm run typecheck                                     # clean
 npm run build                                         # clean (one chunk-size advisory)
-npx playwright test                                   # 7 passed
+npx playwright test                                   # 13 passed
 
 cd ..
 docker compose up -d --build                          # both services healthy
@@ -197,7 +200,7 @@ Full lists: `docs/risks.md`, `docs/DEFECT_REGISTER.md`, `docs/tasks.md`.
 | `docs/architecture.md` | Modules, boundaries, cross-cutting choices |
 | `docs/hld.md` / `docs/lld.md` | System design and implementation detail |
 | `docs/tech_stack.md` | Pinned versions and deliberate omissions |
-| `docs/design.md` | Palette, components, required states, accessibility |
+| `docs/design.md` / `design-system/customer-learning-hub/MASTER.md` | Palette, contrast pairs, components, motion, required states, accessibility |
 | `docs/database.md` / `docs/data_dictionary.md` | Tables, constraints, migrations, generated column reference |
 | `docs/api.md` | Endpoint reference, auth requirements, vocabularies |
 | `docs/auth.md` | Password sessions, role matrix, known gaps |

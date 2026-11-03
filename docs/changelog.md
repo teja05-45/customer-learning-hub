@@ -2,6 +2,48 @@
 
 Format: what changed and why it matters. No claim is made for a change that was not executed.
 
+## 1.4.0 — Executive Emerald redesign and browser-verified exports
+
+### Changed
+
+- The blue-and-white interface was replaced by the Executive Emerald design system: warm canvas
+  (`#F7F5EF`), deep emerald chrome (`#103F32`), emerald action (`#176B52`), gold provenance
+  marker (`#D6A84F`) and terracotta contradiction accent. Tokens and component refinements live in
+  `frontend/src/styles/emerald.css`, loaded after the base stylesheet.
+- Typography now pairs a serif display stack for page and brand titles with the existing sans for
+  operational UI. Charts use an emerald/teal/gold/terracotta/plum categorical ramp.
+- Motion tokens were introduced for fast interaction (140 ms), standard transitions (200 ms) and
+  panels (260 ms), with a global `prefers-reduced-motion` override.
+- The Claude Code design tooling was not available: neither `ui-ux-pro-max-cli` nor the 21st MCP
+  server was installed or connected, so no generated component or design system was consumed.
+  This is recorded in `docs/design.md` and the master design system rather than claimed.
+
+### Added
+
+- `design-system/customer-learning-hub/MASTER.md` — palette with contrast pairs, typography,
+  layout, components, motion, accessibility rules and page overrides.
+- `frontend/e2e/responsive.spec.ts` — every primary screen at 375, 768, 1024 and 1440 px, the
+  off-canvas navigation at the small breakpoints, the desktop rail above them, and no page-level
+  horizontal overflow.
+- `frontend/e2e/exports.spec.ts` — clicks all eight Settings export buttons, waits for the real
+  downloads, asserts filenames, the UTF-8 BOM, headers, row counts and provenance labels.
+
+### Fixed
+
+- Sidebar section labels failed axe colour contrast (3.7:1) against the new chrome; the token is
+  now `#B9CDC2` (≈6:1) and the accessibility suite passes.
+- Stray inline blues on the authentication screen and the progress-bar track were replaced with
+  design tokens.
+- Browser tests that assumed a client-supplied identity header, a cross-host cookie or a quiet
+  signed-out `/auth/me` probe were corrected. They now use explicit signed-in API contexts and
+  collect console errors only after sign-in; assertions were not weakened.
+
+### Verified
+
+- Backend: 79 passed.
+- Browser: 13 passed, including axe and all exports; screenshots regenerated.
+- `tsc --noEmit` and `vite build`: clean.
+
 ## 1.3.0 — Credential throttling, CSRF defence and account administration
 
 ### Added
