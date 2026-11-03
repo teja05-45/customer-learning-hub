@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     auth,
     decisions,
     evidence,
+    feedback,
     insights,
     interviews,
     participants,
@@ -25,6 +26,7 @@ api_router.include_router(participants.router)
 api_router.include_router(recruitment.router)
 api_router.include_router(interviews.router)
 api_router.include_router(evidence.router)
+api_router.include_router(feedback.router)
 api_router.include_router(insights.router)
 api_router.include_router(decisions.router)
 api_router.include_router(actions.router)

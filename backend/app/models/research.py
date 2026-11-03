@@ -180,3 +180,45 @@ class Evidence(Base, IdMixin):
     @property
     def is_verified_source(self) -> bool:
         return self.provenance_status == "recorded" and bool(self.provenance.strip())
+
+
+class FeedbackRecord(Base, IdMixin, TimestampMixin):
+    """A unified feedback source.
+
+    Covers synchronous interviews, asynchronous written feedback and imported
+    support/review material. ``content`` is always the original customer words;
+    ``interpretation`` is the researcher's reading and is never merged into it.
+    A record may be unattributed, but it is then labelled as such everywhere.
+    """
+
+    __tablename__ = "feedback_records"
+
+    code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("research_projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    participant_id: Mapped[str | None] = mapped_column(
+        ForeignKey("participants.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    interview_id: Mapped[str | None] = mapped_column(
+        ForeignKey("interviews.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    collection_method: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_reference: Mapped[str] = mapped_column(String(320), nullable=False, default="")
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    contributor: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    interpretation: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    context: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    verification_status: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="unverified", index=True
+    )
+    created_by_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    project: Mapped[ResearchProject] = relationship()
+    participant: Mapped["Participant | None"] = relationship()  # noqa: F821
+    interview: Mapped[Interview | None] = relationship()
+    created_by: Mapped["User | None"] = relationship()  # noqa: F821
+
+    __table_args__ = (Index("ix_feedback_project_source", "project_id", "source_type"),)

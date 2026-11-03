@@ -81,7 +81,15 @@ def roles_for_write(method: str, path: str) -> set[str] | None:
     if relative.startswith(("/demo", "/settings")):
         return ADMIN_ROLES
     if relative.startswith(
-        ("/projects", "/participants", "/recruitment", "/interviews", "/evidence", "/insights")
+        (
+            "/projects",
+            "/participants",
+            "/recruitment",
+            "/interviews",
+            "/evidence",
+            "/feedback",
+            "/insights",
+        )
     ):
         return RESEARCH_WRITE_ROLES
     if relative.startswith(("/decisions", "/actions")):

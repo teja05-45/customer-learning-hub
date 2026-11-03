@@ -20,6 +20,7 @@ from app.models import (
     DecisionEvidence,
     DecisionInsight,
     Evidence,
+    FeedbackRecord,
     Insight,
     InsightEvidence,
     Interview,
@@ -66,6 +67,7 @@ def seed_demo_data(db: Session, reset: bool = False) -> dict[str, int]:
     recruitment = _seed_recruitment(db, users, projects, participants)
     interviews = _seed_interviews(db, users, projects, participants, recruitment)
     evidence = _seed_evidence(db, users, projects, participants, interviews)
+    _seed_feedback(db, users, projects, participants, interviews)
     insights = _seed_insights(db, users, projects, evidence)
     decisions = _seed_decisions(db, users, projects, insights, evidence)
     _seed_actions(db, users, decisions, insights)
@@ -94,6 +96,7 @@ def _wipe(db: Session) -> None:
         InsightEvidence,
         Insight,
         Evidence,
+        FeedbackRecord,
         ConsentRecord,
         InterviewGuideQuestion,
         Interview,
@@ -117,6 +120,7 @@ def _counts(db: Session) -> dict[str, int]:
         "recruitment": RecruitmentRecord,
         "interviews": Interview,
         "evidence": Evidence,
+        "feedback": FeedbackRecord,
         "insights": Insight,
         "decisions": Decision,
         "actions": BusinessAction,
@@ -627,6 +631,76 @@ def _seed_evidence(
         evidence[key] = ev
     db.flush()
     return evidence
+
+
+def _seed_feedback(
+    db: Session,
+    users: dict[str, User],
+    projects: dict[str, ResearchProject],
+    participants: dict[str, Participant],
+    interviews: dict[str, Interview],
+) -> None:
+    """Add asynchronous and interview feedback in one provenance-preserving table."""
+    rows = [
+        (
+            "ananya", "i_shampoo_ananya", "interview", "phone_interview",
+            "Interview INT-0001 · synthetic transcript, 00:08:40", 24,
+            "It lathered differently at home than it did in the shop. I finished it, but I did not buy it again.",
+            "The gap between the in-store trial and home use may be an expectation problem.",
+            "Repeat-purchase conversation, synthetic.", "verified", "shampoo_repeat",
+        ),
+        (
+            "rahul", None, "short_survey", "short_survey",
+            "Post-purchase survey · wave 2 · response 41", 38,
+            "I would probably buy it again if the bottle was smaller.",
+            "",
+            "One-question exit survey. No follow-up was possible.", "unverified", "shampoo_repeat",
+        ),
+        (
+            "divya", None, "customer_support", "support_feedback",
+            "Support ticket export · delivery exception · approved sample", 16,
+            "The replacement arrived after I had already bought another brand.",
+            "Fulfilment timing, not product quality, may explain this lapse.",
+            "Support resolution note, synthetic.", "needs_review", "shampoo_repeat",
+        ),
+        (
+            None, None, "product_review", "product_review",
+            "Marketplace review export · approved sample", 45,
+            "Nice smell but the pump stopped working after a week.",
+            "",
+            "Public review with no participant identity. Unattributed by design.", "unverified", "shampoo_repeat",
+        ),
+        (
+            "meera", None, "csv_import", "imported_feedback",
+            "CRM feedback export · batch 2026-04 (approved)", 12,
+            "I keep it in the shared bathroom because it does not leak.",
+            "Shelf behaviour may matter more than brand routine for household buyers.",
+            "Imported from an approved customer-feedback export.", "verified", "bodywash",
+        ),
+    ]
+    for index, row in enumerate(rows, start=1):
+        (participant_key, interview_key, source_type, method, reference, days,
+         content, interpretation, context, verification, project_key) = row
+        interview = interviews.get(interview_key) if interview_key else None
+        db.add(
+            FeedbackRecord(
+                code=f"FB-{index:04d}",
+                project_id=projects[project_key].id,
+                participant_id=participants[participant_key].id if participant_key else None,
+                interview_id=interview.id if interview else None,
+                source_type=source_type,
+                collection_method=method,
+                source_reference=reference,
+                collected_at=_dt(days, hour=11),
+                contributor="Priya Menon" if source_type == "interview" else "Operations import",
+                content=content,
+                interpretation=interpretation,
+                context=context,
+                verification_status=verification,
+                created_by_id=users["priya"].id,
+            )
+        )
+    db.flush()
 
 
 def _seed_insights(

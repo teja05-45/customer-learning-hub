@@ -191,5 +191,85 @@ DECISION_TRANSITIONS: dict[str, set[str]] = {
 }
 
 
+class FeedbackSourceType(str, Enum):
+    INTERVIEW = "interview"
+    WRITTEN_FEEDBACK = "written_feedback"
+    STRUCTURED_FORM = "structured_form"
+    SHORT_SURVEY = "short_survey"
+    CUSTOMER_SUPPORT = "customer_support"
+    PRODUCT_REVIEW = "product_review"
+    MANUAL_ENTRY = "manual_entry"
+    CSV_IMPORT = "csv_import"
+
+
+class CollectionMethod(str, Enum):
+    IN_PERSON_INTERVIEW = "in_person_interview"
+    VIDEO_INTERVIEW = "video_interview"
+    PHONE_INTERVIEW = "phone_interview"
+    WRITTEN_FEEDBACK = "written_feedback"
+    STRUCTURED_FORM = "structured_form"
+    SHORT_SURVEY = "short_survey"
+    SUPPORT_FEEDBACK = "support_feedback"
+    PRODUCT_REVIEW = "product_review"
+    IMPORTED_FEEDBACK = "imported_feedback"
+    MANUAL_ENTRY = "manual_entry"
+
+
+class VerificationStatus(str, Enum):
+    UNVERIFIED = "unverified"
+    NEEDS_REVIEW = "needs_review"
+    VERIFIED = "verified"
+
+
+# Collection depth is deliberately explicit: a survey answer and a moderated
+# interview are both useful, but they are not equal evidence.
+FEEDBACK_DEPTH: dict[str, tuple[str, str]] = {
+    CollectionMethod.IN_PERSON_INTERVIEW.value: (
+        "deep",
+        "Moderated in-person conversation with room to probe and clarify.",
+    ),
+    CollectionMethod.VIDEO_INTERVIEW.value: (
+        "deep",
+        "Moderated video conversation with room to probe and clarify.",
+    ),
+    CollectionMethod.PHONE_INTERVIEW.value: (
+        "deep",
+        "Moderated phone conversation; tone and context are partly lost.",
+    ),
+    CollectionMethod.WRITTEN_FEEDBACK.value: (
+        "medium",
+        "Written in the customer's own words, but nobody could probe the answer.",
+    ),
+    CollectionMethod.STRUCTURED_FORM.value: (
+        "medium",
+        "Structured prompts answered without a moderator; follow-up is impossible.",
+    ),
+    CollectionMethod.SHORT_SURVEY.value: (
+        "limited",
+        "Closed or short answers. Useful for coverage, not for explaining why.",
+    ),
+    CollectionMethod.SUPPORT_FEEDBACK.value: (
+        "context",
+        "Recorded while resolving a support issue, not collected for research.",
+    ),
+    CollectionMethod.PRODUCT_REVIEW.value: (
+        "context",
+        "Public review with no sampling control and no ability to probe.",
+    ),
+    CollectionMethod.IMPORTED_FEEDBACK.value: (
+        "context",
+        "Bulk import. Depth depends on the originating system.",
+    ),
+    CollectionMethod.MANUAL_ENTRY.value: (
+        "context",
+        "Manually transcribed. Provenance depends on the recorded source reference.",
+    ),
+}
+
+
+def feedback_depth(method: str) -> tuple[str, str]:
+    return FEEDBACK_DEPTH.get(method, ("context", "No depth classification is defined for this method."))
+
+
 def values(enum_cls: type[Enum]) -> list[str]:
     return [member.value for member in enum_cls]
