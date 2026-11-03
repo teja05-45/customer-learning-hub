@@ -15,6 +15,7 @@ const SCREENS = [
   { path: '/recruitment', heading: 'Recruitment pipeline' },
   { path: '/interviews', heading: 'Interviews' },
   { path: '/evidence', heading: 'Evidence' },
+  { path: '/feedback', heading: 'Feedback sources' },
   { path: '/insights', heading: 'Insights library' },
   { path: '/decisions', heading: 'Decisions & actions' },
   { path: '/actions', heading: 'Actions' },

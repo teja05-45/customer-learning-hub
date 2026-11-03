@@ -31,6 +31,10 @@ test.describe('documentation screenshots', () => {
     await page.waitForTimeout(600)
     await page.screenshot({ path: `${OUT}/05-project-evidence.png`, fullPage: true })
 
+    await page.getByRole('link', { name: 'Feedback sources' }).click()
+    await expect(page.getByRole('heading', { name: 'Feedback sources' })).toBeVisible()
+    await page.screenshot({ path: `${OUT}/19-feedback-sources.png`, fullPage: true })
+
     await page.getByRole('link', { name: 'Participants' }).click()
     await expect(page.getByRole('heading', { name: 'Participants' })).toBeVisible()
     await page.screenshot({ path: `${OUT}/06-participants.png`, fullPage: true })

@@ -18,6 +18,7 @@ const EXPORTS = [
   'Recruitment records',
   'Interviews',
   'Evidence',
+  'Feedback sources',
   'Insights',
   'Decisions',
   'Actions',

@@ -15,6 +15,7 @@ const SCREENS = [
   { path: '/recruitment', name: 'Recruitment' },
   { path: '/interviews', name: 'Interviews' },
   { path: '/evidence', name: 'Evidence' },
+  { path: '/feedback', name: 'Feedback sources' },
   { path: '/insights', name: 'Insights' },
   { path: '/decisions', name: 'Decisions' },
   { path: '/actions', name: 'Actions' },

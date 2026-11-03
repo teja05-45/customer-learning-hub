@@ -13,6 +13,7 @@ const SCREENS: Array<{ path: string; heading: string }> = [
   { path: '/participants', heading: 'Participants' },
   { path: '/recruitment', heading: 'Recruitment pipeline' },
   { path: '/interviews', heading: 'Interviews' },
+  { path: '/feedback', heading: 'Feedback sources' },
   { path: '/insights', heading: 'Insights library' },
   { path: '/decisions', heading: 'Decisions & actions' },
   { path: '/actions', heading: 'Actions' },
