@@ -2,6 +2,53 @@
 
 Format: what changed and why it matters. No claim is made for a change that was not executed.
 
+## 1.6.0 — Evidence traceability
+
+### Added
+
+- Evidence can be derived from **any** feedback source, not only an interview:
+  `POST /feedback/{id}/evidence` copies the customer statement verbatim and snapshots the source
+  type, collection method, research depth, reference, verification state and collection date.
+- `contextual` joins `supporting` and `contradictory` as a relationship classification. The
+  classification lives on the association row, so one quote can support one finding, contradict
+  another and merely add context to a third.
+- `insight_evidence` now records a rationale, optional researcher confidence, tags, the author and
+  an `updated_at` timestamp. Re-classifying is a `PATCH`; the evidence row is never touched.
+- Grouped reads and reverse navigation: `GET /insights/{id}/evidence`,
+  `GET /evidence/{id}/insights`, `GET /insights/{id}/traceability` and
+  `GET /decisions/{id}/traceability`.
+- Insight page: three separated evidence groups, provenance per item, quality counts that keep
+  quantity separate from quality, an explicit **unsubstantiated** state, and contradiction made
+  visible rather than filtered out.
+- Add-evidence workflow with search, source-type and verification filters, statement preview,
+  multi-select, classification, rationale, optional confidence and tags.
+- Evidence page lists every insight that uses the item, grouped by classification, with the
+  researcher's reason and author.
+- Decision page shows the reasoning chain back to customer statements, including contradictions
+  carried through from linked insights and explicit gaps.
+- Traceability CSV export (`/exports/traceability.csv`): one row per relationship, UTF-8 BOM,
+  formula-injection safe, no personal contact fields, audited.
+- Alembic revision `b7d2f4a91c03` with upgrade/downgrade tests, and 17 new backend tests
+  (108 total). Five Playwright traceability journeys plus axe coverage of the new screens and the
+  add-evidence dialog (20 browser tests total).
+
+### Fixed
+
+- **All existing evidence-to-insight and evidence-to-decision links would have been deleted by the
+  upgrade.** On SQLite, adding a foreign key rebuilds `evidence`, and the implicit delete cascades
+  into both link tables. The migration now backs the children up and restores them; the test
+  asserts links and statements survive a full upgrade → downgrade → upgrade cycle.
+- **`SEED_ON_STARTUP` was never honoured.** Docker came up with an empty workspace, so
+  demonstration entry had no user and every browser test failed at sign-in. The lifespan hook now
+  seeds idempotently.
+- **An existing Docker volume could not start the current code.** `create_all` cannot add columns,
+  so the first insert failed with "table evidence has no column named feedback_record_id" and a
+  demo reset left the workspace empty. A SQLite compatibility guard adds the missing columns and
+  backfills timestamps; `tests/test_schema_upgrade.py` reproduces the legacy database.
+- Unlinking evidence is now audited with the actor and the classification; previously a
+  contradiction could be removed silently.
+- Evidence and feedback deletion now write an audit entry naming the actor.
+
 ## 1.5.0 — Unified feedback sources
 
 ### Added

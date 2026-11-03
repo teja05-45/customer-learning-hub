@@ -33,6 +33,9 @@ The Playwright suite expects the API at `http://127.0.0.1:8000/api/v1` (override
 | `tests/test_integrity.py` | Formula-injection neutralisation, settings persistence, link uniqueness, sufficiency recomputation, unlink audit trail |
 | `tests/test_seed.py` | Demo reset repeatability, unique generated codes, synthetic labelling, provenance mix |
 | `tests/test_feedback.py` | Statement and interpretation kept separate, survey depth labelled as limited, unattributed sources allowed and marked, verified sources require a reference, interview/project matching, source-type/interview mismatch, CX role rejection, filtering and review, audited deletion, CSV content preservation |
+| `tests/test_traceability.py` | Feedback-derived evidence is verbatim and snapshotted; unverified/unattributed labelling; three classifications and grouped reads; one evidence across several insights; re-classification leaves the statement untouched; feedback edits do not rewrite derived evidence; duplicates, invalid values, missing records; cross-project rejection and the explicit cross-project workflow; audited unlink with both identifiers; quality counts and unsubstantiated state; decision chain; traceability export provenance and uniqueness; role enforcement; atomic insight creation |
+| `tests/test_migrations.py` | Alembic upgrade on a real file, column presence, a full downgrade to the previous revision, re-upgrade, and preservation of existing link and evidence rows |
+| `tests/test_schema_upgrade.py` | A legacy database without the traceability columns gains them through the compatibility guard, is idempotent on a second run, and keeps every row |
 
 ## Actual results
 
@@ -40,7 +43,7 @@ Executed on 3 November 2026 against the working tree of this release:
 
 ```
 cd backend && python -m pytest -q
-91 passed, 1 warning in 98.79s
+108 passed, 1 warning in 73.91s
 ```
 
 The warning is a third-party Starlette/anyio deprecation notice, not a project failure.
@@ -69,14 +72,29 @@ cookie round-trips through Starlette's `TestClient`.
 - `tsc --noEmit` — clean.
 - `vite build` — succeeds with one chunk-size advisory (single ~1 MB bundle).
 - Playwright specs: `smoke.spec.ts` (primary screens, deep links, unknown route, API failure
-  state, skip link, command palette), `a11y.spec.ts` (axe scan of every screen),
-  `journey.spec.ts` (research-to-decision workflow), `exports.spec.ts` (all nine Settings
-  downloads parsed as CSV), `feedback.spec.ts` (record → verify → delete), `responsive.spec.ts`
+  state, skip link, command palette), `a11y.spec.ts` (axe scan of every primary screen, plus the
+  insight page, evidence page and add-evidence dialog),
+  `journey.spec.ts` (research-to-decision workflow), `exports.spec.ts` (all nine entity Settings
+  downloads parsed as CSV), `traceability.spec.ts` (survey → evidence → insight; evidence ↔ insight
+  ↔ decision; cross-project and role refusal; export and audited removal at four widths;
+  context-only insight), `feedback.spec.ts` (record → verify → delete), `responsive.spec.ts`
   (375/768/1024/1440 plus the auth screen), `screenshots.spec.ts` (documentation captures).
 
 ```
 cd frontend && npx playwright test
-14 passed (2.0m)
+20 passed (1.9m)
+```
+
+The traceability export is verified twice: in `test_traceability.py` (headers, provenance,
+classification, statement integrity, no duplicate pairs) and in `traceability.spec.ts`, which
+downloads the file through the Settings button, parses it and checks the statement and rationale.
+
+Against the Docker build (`E2E_BASE_URL=http://localhost:8081`), the smoke and traceability specs
+were also executed:
+
+```
+npx playwright test e2e/smoke.spec.ts e2e/traceability.spec.ts
+8 passed (27.5s)
 ```
 
 Both servers were running for that run: FastAPI on `127.0.0.1:8000` and Vite on
@@ -101,6 +119,10 @@ axe run caught a real contrast failure in the sidebar section labels; the token 
 
 - No component-level unit tests; the browser suite covers navigation, forms, filters, modals and
   states.
+- The migration test runs on SQLite only. The migration is written for the generic Alembic API and
+  PostgreSQL uses the same operations, but no PostgreSQL instance was available to execute it.
+- The traceability export is not tested with a spreadsheet application; CSV correctness and
+  formula neutralisation are tested at the file level.
 - No load or performance testing; volumes are prototype-scale. `docs/performance.md` records the
   one measurement that was taken and how.
 - No penetration testing. Authentication tests cover the enforcement path, not exploitation.

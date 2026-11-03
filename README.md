@@ -11,6 +11,8 @@ are stored.
 
 ![Overview dashboard](docs/screenshots/02-overview.png)
 
+![Insight detail with grouped supporting, contradictory and contextual evidence](docs/screenshots/11-insight-traceability.png)
+
 ---
 
 ## The business problem
@@ -98,15 +100,16 @@ seed is idempotent: it is skipped when users already exist.
 | Participants | Synthetic directory, segment and eligibility filters, purchase context, participation history; no contact fields accepted |
 | Recruitment | Ten-stage pipeline, append-only history, segment coverage, defined response-rate denominator |
 | Interviews | Schedule, reschedule, cancel, complete, neutral guide, consent records, notes, summary, follow-up questions |
-| Feedback sources | Interviews, written feedback, structured forms, short surveys, support feedback, product reviews, manual entries and CSV imports in one provenance-preserving record; explicit depth labels; verification requires a source reference |
-| Evidence | Five types, provenance and verification status, review action, correction, supporting and contradictory links |
+| Feedback sources | Interviews, written feedback, structured forms, short surveys, support feedback, product reviews, manual entries and CSV imports in one provenance-preserving record; explicit depth labels; verification requires a source reference; one click turns a source into evidence |
+| Evidence | Five types, provenance snapshot (source, method, depth, verification, reference, collection date), review action, correction, and evidence derived from any feedback source |
+| Traceability | Supporting, contradictory and contextual relationships, each with rationale, optional confidence, tags and author; grouped evidence, quality counts, reverse views, audited unlink and a decision reasoning chain |
 | Insights | Create, edit, link/unlink evidence, confidence, limitations, review, related research |
 | Decisions | Problem, rationale, limitations, linked sources, owner, status; unevidenced decisions labelled |
 | Actions | Owner, due date, priority, status, overdue tracking |
 | Overview | Derived metrics, segment coverage, timeline, outstanding follow-ups, activity trail |
 | Analytics | Basis-labelled metrics, reuse detail, unresolved questions, measurement gaps |
 | Search | Deterministic search across seven entity types, with related-research suggestions |
-| Exports | Nine CSV entities, including feedback sources, with correct headers, Unicode, formula-injection safety, audit logging and empty-dataset handling |
+| Exports | Ten CSV exports: nine entities plus per-relationship evidence traceability, with correct headers, Unicode, formula-injection safety, audit logging and empty-dataset handling |
 | Settings | Organisation name, research lead, recording default, retention months, demo reset |
 | Authentication | Email + password, PBKDF2 hashing, server-side sessions in an HTTP-only cookie, sign-out, password change |
 | Authorisation | API-enforced roles on every write; the browser cannot assert a role |
@@ -143,7 +146,7 @@ backend/
   app/schemas/            Pydantic contracts
   app/seed/               synthetic demo dataset
   alembic/                migration environment and initial revision
-  tests/                  91 pytest tests, including auth, feedback and export suites
+  tests/                  108 pytest tests, including traceability, migration and export suites
 frontend/
   src/pages/              one component per screen
   src/components/         shared UI, evidence card, search, dialogs
@@ -160,15 +163,17 @@ These commands were executed for this release:
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe -m pytest -q                 # 91 passed
+.venv\Scripts\python.exe -m pytest -q                 # 108 passed
 
 cd ..\frontend
 npm run typecheck                                     # clean
 npm run build                                         # clean (one chunk-size advisory)
-npx playwright test                                   # 14 passed
+npx playwright test                                   # 20 passed (includes axe and 5 traceability journeys)
 
 cd ..
 docker compose up -d --build                          # both services healthy
+# containerised smoke + traceability journeys, against http://localhost:8081
+$env:E2E_BASE_URL="http://localhost:8081"; cd frontend; npx playwright test e2e/smoke.spec.ts e2e/traceability.spec.ts   # 8 passed
 ```
 
 Run the browser suite against the Docker build:
@@ -206,6 +211,10 @@ Full lists: `docs/risks.md`, `docs/DEFECT_REGISTER.md`, `docs/tasks.md`.
 | `docs/api.md` | Endpoint reference, auth requirements, vocabularies |
 | `docs/auth.md` | Password sessions, role matrix, known gaps |
 | `docs/security.md` | Minimisation, consent, validation, threats |
+| `docs/traceability-audit.md` | Independent audit of the existing repository before the change |
+| `docs/evidence-traceability.md` | Data model, relationship lifecycle, API, UI workflow, export and test coverage |
+| `docs/evaluator-report.md` | Independent FDE scorecard, adversarial review and hiring recommendation |
+| `docs/final-delivery-report.md` | Delivery record: what was implemented, tested, unverified or not implemented |
 | `docs/testing.md` | Suites, commands, actual results, gaps |
 | `docs/deployment.md` | Docker, Windows, migrations, troubleshooting |
 | `docs/backup_recovery.md` / `docs/operations.md` | Verified backup procedure, runbook, incidents |

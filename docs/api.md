@@ -124,22 +124,30 @@ Rules enforced by the API:
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/evidence` | `project_id`, `interview_id`, `participant_id`, `evidence_type[]`, `review_status[]`, `segment`, `q`, `unverified_only` |
+| GET | `/evidence` | `project_id`, `interview_id`, `participant_id`, `feedback_record_id`, `evidence_type[]`, `review_status[]`, `segment`, `q`, `unverified_only` |
 | POST | `/evidence` | Must belong to an interview; missing provenance is flagged |
 | GET/PATCH/DELETE | `/evidence/{id}` | PATCH can correct provenance or review status |
+| GET | `/evidence/{id}/insights` | Reverse traceability: insights grouped by supporting / contradictory / contextual, with rationale |
 | GET | `/evidence/stats` | Totals by type, unverified and unreviewed counts |
+| GET | `/feedback/{id}/evidence` | Evidence derived from one feedback source |
+| POST | `/feedback/{id}/evidence` | Derives evidence, copying the customer statement verbatim; duplicate derivation returns 409 |
 | GET | `/insights` | `q`, `project_id`, `status[]`, `segment[]`, `confidence[]`, `owner_id`, `sort` |
 | POST | `/insights` | Optional evidence ids; validation requires at least one link |
 | GET/PATCH | `/insights/{id}` | Edit fields and review state |
-| POST | `/insights/{id}/evidence` | Link with `role` supporting/contradictory; cross-project rejected |
-| DELETE | `/insights/{id}/evidence/{evidence_id}` | Unlink; evidence record unchanged |
+| POST | `/insights/{id}/evidence` | Link with `role` supporting/contradictory/contextual, `rationale`, optional `confidence` and `tags`; cross-project rejected; duplicates return 409 with the existing relationship |
+| GET | `/insights/{id}/evidence` | Grouped relationships with classification, rationale, confidence, tags, author and full evidence |
+| PATCH | `/insights/{id}/evidence/{relationship_id}` | Re-classify or edit the relationship only; the evidence is never modified |
+| DELETE | `/insights/{id}/evidence/{relationship_id}` | Audited unlink; evidence record unchanged. The parameter also accepts the evidence id |
+| GET | `/insights/{id}/traceability` | Insight + grouped evidence + quality counts + decisions/actions + warnings |
 | GET | `/insights/{id}/related` | Related research by keyword overlap |
 | GET | `/insights/{id}/reuse` | Reuse flag and definition |
 | GET | `/decisions` | `q`, `status[]`, `business_function[]`, `project_id`, `owner_id`, `has_evidence`, `sort` |
 | POST | `/decisions` | Links insights/evidence; may be unevidenced and labelled |
 | GET/PATCH | `/decisions/{id}` | Status transitions validated |
+| GET | `/decisions/{id}/traceability` | Decision → insights → evidence, direct evidence, actions, contradictions, gaps and chain |
 | POST | `/decisions/{id}/links` | Link more sources |
 | DELETE | `/decisions/{id}/links/{kind}/{link_id}` | Unlink; recomputes sufficiency |
+| GET | `/exports/traceability.csv` | One row per insight-evidence relationship with statement, provenance, classification and rationale |
 | POST | `/decisions/{id}/actions` | Create follow-up with owner and due date |
 | GET | `/actions` | `status[]`, `owner_id`, `decision_id`, `q`, `overdue_only`, `due_before` |
 | POST | `/actions` | Create a standalone action |
