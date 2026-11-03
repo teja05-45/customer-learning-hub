@@ -14,13 +14,15 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_actor
 from app.core.database import get_db
-from app.core.errors import NotFoundError, RuleViolationError
-from app.models import FeedbackRecord, Interview, Participant, ResearchProject, User
+from app.core.errors import ConflictError, NotFoundError, RuleViolationError
+from app.models import Evidence, FeedbackRecord, Interview, Participant, ResearchProject, User
 from app.models.enums import FeedbackSourceType, feedback_depth
 from app.schemas.common import Message, Ref
+from app.schemas.evidence import EvidenceOut
 from app.schemas.feedback import FeedbackCreate, FeedbackListResponse, FeedbackOut, FeedbackUpdate
 from app.services.activity import log_activity
 from app.services.common import next_code
+from app.services.serializers import evidence_out
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
@@ -301,6 +303,95 @@ def update_feedback(
     db.commit()
     db.refresh(record)
     return _feedback_out(db, record)
+
+
+@router.post(
+    "/{feedback_id}/evidence",
+    response_model=EvidenceOut,
+    status_code=status.HTTP_201_CREATED,
+    tags=["evidence"],
+)
+def create_evidence_from_feedback(
+    feedback_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> EvidenceOut:
+    """Turn one feedback source into evidence without rewriting the customer's words.
+
+    The statement is copied byte for byte from the stored feedback content; the
+    researcher's interpretation and context are copied into their own fields.
+    Deriving evidence twice from the same source is refused rather than creating
+    duplicate research history.
+    """
+    record = db.get(FeedbackRecord, feedback_id)
+    if record is None:
+        raise NotFoundError(f"Feedback source '{feedback_id}' does not exist.")
+
+    existing = db.execute(
+        select(Evidence).where(Evidence.feedback_record_id == record.id)
+    ).scalars().first()
+    if existing is not None:
+        raise ConflictError(
+            f"Evidence {existing.code} already exists for this feedback source.",
+            details={"evidence_id": existing.id, "evidence_code": existing.code},
+        )
+
+    participant = db.get(Participant, record.participant_id) if record.participant_id else None
+    depth, _depth_note = feedback_depth(record.collection_method)
+    source_reference = (record.source_reference or "").strip()
+    evidence = Evidence(
+        code=next_code(db, Evidence, "code", "EV"),
+        interview_id=record.interview_id,
+        feedback_record_id=record.id,
+        project_id=record.project_id,
+        participant_id=record.participant_id,
+        # A written, surveyed or imported statement is still a verbatim quote.
+        evidence_type="verbatim_quote",
+        content=record.content,
+        interpretation=record.interpretation,
+        customer_context=record.context,
+        segment=participant.segment if participant else "unknown",
+        provenance=source_reference,
+        provenance_status="recorded" if source_reference else "missing",
+        confidence="medium" if record.verification_status == "verified" else "low",
+        review_status="unreviewed" if source_reference else "flagged",
+        captured_by_id=actor.id if actor else None,
+        source_type=record.source_type,
+        collection_method=record.collection_method,
+        research_depth=depth,
+        source_reference=source_reference,
+        verification_state=record.verification_status,
+        collected_at=record.collected_at,
+    )
+    db.add(evidence)
+    db.flush()
+    log_activity(
+        db,
+        entity_type="evidence",
+        entity_id=evidence.id,
+        entity_label=f"{evidence.code} · from {record.code}",
+        verb="derived",
+        summary=(
+            f"Evidence derived from feedback source {record.code} "
+            f"({record.source_type.replace('_', ' ')}). The customer statement was copied unchanged."
+        ),
+        actor_id=actor.id if actor else None,
+        project_id=record.project_id,
+    )
+    db.commit()
+    db.refresh(evidence)
+    return evidence_out(db, evidence)
+
+
+@router.get("/{feedback_id}/evidence", response_model=list[EvidenceOut], tags=["evidence"])
+def list_feedback_evidence(feedback_id: str, db: Session = Depends(get_db)) -> list[EvidenceOut]:
+    record = db.get(FeedbackRecord, feedback_id)
+    if record is None:
+        raise NotFoundError(f"Feedback source '{feedback_id}' does not exist.")
+    rows = db.execute(
+        select(Evidence).where(Evidence.feedback_record_id == record.id).order_by(Evidence.captured_at.asc())
+    ).scalars().all()
+    return [evidence_out(db, row) for row in rows]
 
 
 @router.delete("/{feedback_id}", response_model=Message)

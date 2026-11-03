@@ -15,6 +15,7 @@ from app.models import (
     DecisionEvidence,
     DecisionInsight,
     Evidence,
+    FeedbackRecord,
     Insight,
     InsightEvidence,
     Interview,
@@ -23,15 +24,91 @@ from app.models import (
     ResearchProject,
     User,
 )
+from app.models.enums import feedback_depth
 from app.schemas.common import Ref
 from app.schemas.decision import ActionOut, DecisionSummary, DecisionDetail, ActionRef, DecisionHistoryItem
 from app.schemas.evidence import EvidenceLinkOut, EvidenceOut, SOURCE_UNAVAILABLE
 from app.schemas.insight import InsightSummary, InsightDetail, DecisionRef
+from app.schemas.traceability import (
+    DecisionTraceability,
+    DecisionTraceabilityInsight,
+    EvidenceGroupOut,
+    EvidenceInsightLinkOut,
+    EvidenceInsightsResponse,
+    InsightEvidenceLinkOut,
+    InsightEvidenceResponse,
+    InsightTraceability,
+    TraceabilityActionOut,
+    TraceabilityDecisionOut,
+    TraceabilityQuality,
+)
 from app.schemas.interview import InterviewSummary, InterviewDetail, ConsentRecordOut, GuideQuestionOut
 from app.schemas.participant import ParticipantOut, RecruitmentOut, RecruitmentEventOut
 from app.schemas.project import ProjectCounts, ProjectSummary, ProjectDetail
 
 REUSE_WINDOW_DAYS = 14
+
+# Interviews store a free-text channel (for example "Video call (simulated)").
+# Mapping it to a collection method is a derivation, not a stored fact, so an
+# unrecognised channel is reported as unknown rather than guessed.
+CHANNEL_METHODS: tuple[tuple[str, str], ...] = (
+    ("video", "video_interview"),
+    ("phone", "phone_interview"),
+    ("in person", "in_person_interview"),
+    ("in-person", "in_person_interview"),
+    ("written", "written_feedback"),
+)
+
+
+def interview_collection_method(channel: str | None) -> str | None:
+    value = (channel or "").lower()
+    for needle, method in CHANNEL_METHODS:
+        if needle in value:
+            return method
+    return None
+
+
+def evidence_provenance(db: Session, ev: Evidence) -> dict:
+    """Where this item came from, without inventing what is not recorded.
+
+    Feedback-derived evidence uses the snapshot written at capture time so a
+    later correction to the source record cannot silently change how the
+    customer's words are presented. Interview evidence is derived from the live
+    interview row.
+    """
+    if ev.source_type:
+        method = ev.collection_method
+        return {
+            "source_type": ev.source_type,
+            "collection_method": method,
+            "research_depth": ev.research_depth or (feedback_depth(method)[0] if method else None),
+            "source_reference": ev.source_reference or "",
+            "verification_state": ev.verification_state,
+            "collected_at": ev.collected_at,
+        }
+
+    if ev.interview_id:
+        interview = db.get(Interview, ev.interview_id)
+        method = interview_collection_method(interview.channel) if interview else None
+        return {
+            "source_type": "interview",
+            "collection_method": method,
+            "research_depth": feedback_depth(method)[0] if method else None,
+            "source_reference": interview.code if interview else "",
+            "verification_state": "verified" if ev.provenance.strip() else "unverified",
+            "collected_at": (
+                (interview.completed_at or interview.scheduled_at) if interview else None
+            ),
+        }
+
+    return {
+        "source_type": None,
+        "collection_method": None,
+        "research_depth": None,
+        "source_reference": "",
+        "verification_state": ev.provenance_status,
+        "collected_at": None,
+    }
 
 
 def _ref(id_: str | None, label: str | None, sublabel: str | None = None) -> Ref | None:
@@ -265,8 +342,10 @@ def interview_detail(db: Session, interview: Interview) -> InterviewDetail:
 def evidence_out(db: Session, ev: Evidence, include_links: bool = True) -> EvidenceOut:
     participant = db.get(Participant, ev.participant_id) if ev.participant_id else None
     interview = db.get(Interview, ev.interview_id) if ev.interview_id else None
+    feedback = db.get(FeedbackRecord, ev.feedback_record_id) if ev.feedback_record_id else None
     project = db.get(ResearchProject, ev.project_id)
     users = user_map(db, {ev.captured_by_id})
+    provenance = evidence_provenance(db, ev)
 
     links: list[EvidenceLinkOut] = []
     if include_links:
@@ -291,6 +370,7 @@ def evidence_out(db: Session, ev: Evidence, include_links: bool = True) -> Evide
         id=ev.id,
         code=ev.code,
         interview_id=ev.interview_id,
+        feedback_record_id=ev.feedback_record_id,
         project_id=ev.project_id,
         participant_id=ev.participant_id,
         evidence_type=ev.evidence_type,
@@ -304,11 +384,19 @@ def evidence_out(db: Session, ev: Evidence, include_links: bool = True) -> Evide
         review_status=ev.review_status,
         captured_at=ev.captured_at,
         captured_by_id=ev.captured_by_id,
+        source_type=provenance["source_type"],
+        collection_method=provenance["collection_method"],
+        research_depth=provenance["research_depth"],
+        source_reference=provenance["source_reference"],
+        verification_state=provenance["verification_state"],
+        collected_at=provenance["collected_at"],
+        is_attributed=bool(ev.participant_id),
         is_verified_source=verified,
         provenance_warning=warning,
         participant=_ref(participant.id, participant.display_name, participant.code) if participant else None,
         captured_by=users.get(ev.captured_by_id or ""),
         interview=_ref(interview.id, interview.code, interview.title) if interview else None,
+        feedback_record=_ref(feedback.id, feedback.code, feedback.source_type) if feedback else None,
         project=_ref(project.id, project.name) if project else None,
         insight_links=links,
     )
@@ -344,13 +432,15 @@ def insight_summary(db: Session, insight: Insight, users: dict[str, Ref] | None 
     ).scalar_one()
     supporting = roles.get("supporting", 0)
     contradictory = roles.get("contradictory", 0)
+    contextual = roles.get("contextual", 0)
     return InsightSummary(
         **_insight_dict(insight),
         owner=users.get(insight.owner_id or ""),
         project=_ref(project.id, project.name) if project else None,
         supporting_count=supporting,
         contradictory_count=contradictory,
-        evidence_count=supporting + contradictory,
+        contextual_count=contextual,
+        evidence_count=supporting + contradictory + contextual,
         decision_count=decision_count,
         reuse_flag=insight_is_reused(db, insight),
     )
@@ -403,6 +493,11 @@ def insight_detail(db: Session, insight: Insight) -> InsightDetail:
     warning = None
     if summary.evidence_count == 0:
         warning = "No evidence is linked yet. Treat this as a hypothesis, not a finding."
+    elif summary.supporting_count == 0 and summary.contextual_count:
+        warning = (
+            "Only contextual evidence is linked. Context explains the setting; it does not support the "
+            "finding."
+        )
     elif summary.evidence_count < 3:
         warning = (
             f"Only {summary.evidence_count} evidence item(s) support this. "
@@ -585,4 +680,318 @@ def decision_detail(db: Session, decision: Decision) -> DecisionDetail:
             )
             for h in history
         ],
+    )
+
+
+# ------------------------------------------------------- evidence traceability
+CLASSIFICATIONS = ("supporting", "contradictory", "contextual")
+
+CHAIN_NOTE = (
+    "Feedback source → Evidence → Insight → Decision → Action. Moving backwards along this chain "
+    "should always land on the customer's own words."
+)
+
+
+def _insight_links(db: Session, insight_id: str) -> list[InsightEvidence]:
+    return db.execute(
+        select(InsightEvidence)
+        .where(InsightEvidence.insight_id == insight_id)
+        .order_by(InsightEvidence.created_at.asc())
+    ).scalars().all()
+
+
+def insight_evidence_link_out(
+    db: Session,
+    link: InsightEvidence,
+    users: dict[str, Ref] | None = None,
+    include_evidence_links: bool = False,
+) -> InsightEvidenceLinkOut:
+    users = users or user_map(db, {link.created_by_id})
+    return InsightEvidenceLinkOut(
+        relationship_id=link.id,
+        classification=link.role,
+        # Rows created before the rationale column existed only have the short
+        # note. Surfacing it keeps old judgements visible instead of blank.
+        rationale=link.rationale or link.note or "",
+        confidence=link.confidence,
+        tags=list(link.tags or []),
+        note=link.note,
+        created_by=users.get(link.created_by_id or ""),
+        created_at=link.created_at,
+        updated_at=link.updated_at,
+        evidence=evidence_out(db, link.evidence, include_links=include_evidence_links),
+    )
+
+
+def insight_evidence_response(db: Session, insight: Insight) -> InsightEvidenceResponse:
+    links = _insight_links(db, insight.id)
+    users = user_map(db, {link.created_by_id for link in links})
+    grouped: dict[str, list[InsightEvidenceLinkOut]] = {role: [] for role in CLASSIFICATIONS}
+    for link in links:
+        if link.role in grouped:
+            grouped[link.role].append(insight_evidence_link_out(db, link, users))
+
+    return InsightEvidenceResponse(
+        insight_id=insight.id,
+        insight_code=insight.code,
+        insight_title=insight.title,
+        project_id=insight.project_id,
+        supporting=EvidenceGroupOut(items=grouped["supporting"], count=len(grouped["supporting"])),
+        contradictory=EvidenceGroupOut(
+            items=grouped["contradictory"], count=len(grouped["contradictory"])
+        ),
+        contextual=EvidenceGroupOut(items=grouped["contextual"], count=len(grouped["contextual"])),
+        total=len(links),
+    )
+
+
+def traceability_quality(db: Session, links: list[InsightEvidence]) -> TraceabilityQuality:
+    roles = {role: 0 for role in CLASSIFICATIONS}
+    for link in links:
+        if link.role in roles:
+            roles[link.role] += 1
+    verified = sum(1 for link in links if link.evidence.is_verified_source)
+    source_types = {
+        (link.evidence.source_type or ("interview" if link.evidence.interview_id else "unknown"))
+        for link in links
+    }
+    unattributed = sum(1 for link in links if not link.evidence.participant_id)
+    return TraceabilityQuality(
+        total=len(links),
+        supporting=roles["supporting"],
+        contradictory=roles["contradictory"],
+        contextual=roles["contextual"],
+        verified=verified,
+        unverified=len(links) - verified,
+        distinct_source_types=len(source_types) if links else 0,
+        unattributed=unattributed,
+        unsubstantiated=len(links) == 0,
+        has_conflict=roles["contradictory"] > 0,
+    )
+
+
+def insight_traceability(db: Session, insight: Insight) -> InsightTraceability:
+    links = _insight_links(db, insight.id)
+    quality = traceability_quality(db, links)
+    decisions = (
+        db.execute(
+            select(Decision)
+            .join(DecisionInsight, DecisionInsight.decision_id == Decision.id)
+            .where(DecisionInsight.insight_id == insight.id)
+            .order_by(Decision.created_at.desc())
+        )
+        .scalars()
+        .unique()
+        .all()
+    )
+
+    action_rows = []
+    for decision in decisions:
+        action_rows.append(
+            (
+                decision,
+                db.execute(
+                    select(BusinessAction)
+                    .where(BusinessAction.decision_id == decision.id)
+                    .order_by(BusinessAction.due_date.asc())
+                )
+                .scalars()
+                .all(),
+            )
+        )
+    owners = user_map(db, {a.owner_id for _d, actions in action_rows for a in actions})
+
+    warnings: list[str] = []
+    if quality.unsubstantiated:
+        warnings.append(
+            "This insight has no linked evidence. It is unsubstantiated: a hypothesis, not a finding."
+        )
+    if quality.supporting == 0 and quality.total > 0:
+        warnings.append(
+            "No evidence is classified as supporting. Context and contradictions cannot carry the finding."
+        )
+    if quality.contradictory:
+        warnings.append(
+            f"{quality.contradictory} item(s) contradict this insight. They are kept visible rather than "
+            "filtered out."
+        )
+    if quality.unverified:
+        warnings.append(
+            f"{quality.unverified} linked item(s) have no recorded source. They cannot be treated as verified "
+            "evidence."
+        )
+    if quality.unattributed:
+        warnings.append(
+            f"{quality.unattributed} item(s) are unattributed, so they cannot be tied to a participant."
+        )
+
+    return InsightTraceability(
+        insight=insight_summary(db, insight),
+        evidence=insight_evidence_response(db, insight),
+        quality=quality,
+        decisions=[
+            TraceabilityDecisionOut(
+                id=decision.id,
+                code=decision.code,
+                title=decision.title,
+                status=decision.status,
+                business_function=decision.business_function,
+                rationale=decision.rationale,
+                decision_date=(
+                    datetime.combine(decision.decision_date, datetime.min.time())
+                    if decision.decision_date
+                    else None
+                ),
+                evidence_sufficient=decision.evidence_sufficient,
+                actions=[
+                    TraceabilityActionOut(
+                        id=action.id,
+                        code=action.code,
+                        title=action.title,
+                        status=action.status,
+                        owner=owners.get(action.owner_id or ""),
+                        due_date=action.due_date,
+                    )
+                    for action in actions
+                ],
+            )
+            for decision, actions in action_rows
+        ],
+        warnings=warnings,
+        chain_note=CHAIN_NOTE,
+    )
+
+
+def evidence_insights(db: Session, evidence: Evidence) -> EvidenceInsightsResponse:
+    rows = db.execute(
+        select(InsightEvidence, Insight)
+        .join(Insight, Insight.id == InsightEvidence.insight_id)
+        .where(InsightEvidence.evidence_id == evidence.id)
+        .order_by(InsightEvidence.created_at.asc())
+    ).all()
+    grouped: dict[str, list[EvidenceInsightLinkOut]] = {role: [] for role in CLASSIFICATIONS}
+    for link, insight in rows:
+        if link.role not in grouped:
+            continue
+        grouped[link.role].append(
+            EvidenceInsightLinkOut(
+                relationship_id=link.id,
+                classification=link.role,
+                rationale=link.rationale or link.note or "",
+                confidence=link.confidence,
+                tags=list(link.tags or []),
+                created_by=user_map(db, {link.created_by_id}).get(link.created_by_id or ""),
+                created_at=link.created_at,
+                updated_at=link.updated_at,
+                insight=insight_summary(db, insight),
+            )
+        )
+
+    return EvidenceInsightsResponse(
+        evidence_id=evidence.id,
+        evidence_code=evidence.code,
+        supporting=grouped["supporting"],
+        contradictory=grouped["contradictory"],
+        contextual=grouped["contextual"],
+        total=len(rows),
+        unattributed=not bool(evidence.participant_id),
+        statement_note=(
+            "The customer statement below is the original captured text. It is never rewritten by a "
+            "classification change."
+        ),
+    )
+
+
+def decision_traceability(db: Session, decision: Decision) -> DecisionTraceability:
+    insights = (
+        db.execute(
+            select(Insight)
+            .join(DecisionInsight, DecisionInsight.insight_id == Insight.id)
+            .where(DecisionInsight.decision_id == decision.id)
+            .order_by(Insight.created_at.asc())
+        )
+        .scalars()
+        .unique()
+        .all()
+    )
+    direct = (
+        db.execute(
+            select(Evidence)
+            .join(DecisionEvidence, DecisionEvidence.evidence_id == Evidence.id)
+            .where(DecisionEvidence.decision_id == decision.id)
+        )
+        .scalars()
+        .unique()
+        .all()
+    )
+
+    contradicting: dict[str, Evidence] = {}
+    insight_rows: list[DecisionTraceabilityInsight] = []
+    for insight in insights:
+        links = _insight_links(db, insight.id)
+        for link in links:
+            if link.role == "contradictory":
+                contradicting[link.evidence.id] = link.evidence
+        insight_rows.append(
+            DecisionTraceabilityInsight(
+                insight=insight_summary(db, insight),
+                support_count=sum(1 for link in links if link.role == "supporting"),
+                contradiction_count=sum(1 for link in links if link.role == "contradictory"),
+                context_count=sum(1 for link in links if link.role == "contextual"),
+                evidence=[evidence_out(db, link.evidence) for link in links],
+            )
+        )
+
+    actions = db.execute(
+        select(BusinessAction)
+        .where(BusinessAction.decision_id == decision.id)
+        .order_by(BusinessAction.due_date.asc())
+    ).scalars().all()
+    owners = user_map(db, {a.owner_id for a in actions})
+
+    gaps: list[str] = []
+    if not insights and not direct:
+        gaps.append(
+            "No insight or evidence is linked. This is an internal judgement, not an evidence-backed "
+            "decision."
+        )
+    for insight in insights:
+        if not _insight_links(db, insight.id):
+            gaps.append(f"{insight.code} is linked but has no evidence of its own.")
+    if contradicting:
+        gaps.append(
+            f"{len(contradicting)} contradictory item(s) were known. The rationale should say why the "
+            "team proceeded anyway."
+        )
+    if not actions:
+        gaps.append("No follow-up action is recorded, so this decision has no owner or due date.")
+
+    return DecisionTraceability(
+        decision_id=decision.id,
+        decision_code=decision.code,
+        decision_title=decision.title,
+        insights=insight_rows,
+        direct_evidence=[evidence_out(db, ev) for ev in direct],
+        actions=[
+            TraceabilityActionOut(
+                id=action.id,
+                code=action.code,
+                title=action.title,
+                status=action.status,
+                owner=owners.get(action.owner_id or ""),
+                due_date=action.due_date,
+            )
+            for action in actions
+        ],
+        escalated_contradictions=[evidence_out(db, ev) for ev in contradicting.values()],
+        gaps=gaps,
+        chain=[
+            f"Decision {decision.code} · {decision.title}",
+            *[f"Insight {i.insight.code} · {i.insight.title}" for i in insight_rows],
+            *[f"Action {a.code} · {a.title}" for a in actions],
+        ],
+        provenance_note=(
+            "Every evidence item here can be opened to read the customer's original words and the "
+            "source it was collected from."
+        ),
     )

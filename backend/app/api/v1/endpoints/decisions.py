@@ -35,9 +35,15 @@ from app.schemas.decision import (
     DecisionListResponse,
     DecisionUpdate,
 )
+from app.schemas.traceability import DecisionTraceability
 from app.services.activity import log_activity
 from app.services.common import next_code
-from app.services.serializers import action_out, decision_detail, decision_summary
+from app.services.serializers import (
+    action_out,
+    decision_detail,
+    decision_summary,
+    decision_traceability,
+)
 
 router = APIRouter(prefix="/decisions", tags=["decisions"])
 
@@ -158,6 +164,15 @@ def get_decision(decision_id: str, db: Session = Depends(get_db)) -> DecisionDet
     if decision is None:
         raise NotFoundError(f"Decision '{decision_id}' does not exist.")
     return decision_detail(db, decision)
+
+
+@router.get("/{decision_id}/traceability", response_model=DecisionTraceability)
+def get_decision_traceability(decision_id: str, db: Session = Depends(get_db)) -> DecisionTraceability:
+    """Walk backwards from the decision to the customer statements behind it."""
+    decision = db.get(Decision, decision_id)
+    if decision is None:
+        raise NotFoundError(f"Decision '{decision_id}' does not exist.")
+    return decision_traceability(db, decision)
 
 
 @router.patch("/{decision_id}", response_model=DecisionDetail)

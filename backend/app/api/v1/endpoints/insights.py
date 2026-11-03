@@ -20,16 +20,30 @@ from app.schemas.common import Message
 from app.schemas.dashboard import SearchResult
 from app.schemas.insight import (
     EvidenceLinkIn,
+    EvidenceLinkUpdate,
     InsightCreate,
     InsightDetail,
     InsightListResponse,
     InsightSummary,
     InsightUpdate,
 )
+from app.schemas.traceability import (
+    InsightEvidenceResponse,
+    InsightTraceability,
+    RelationshipWriteResponse,
+)
 from app.services.activity import log_activity
 from app.services.common import next_code
 from app.services.search import suggest_related
-from app.services.serializers import insight_detail, insight_is_reused, insight_summary
+from app.services.serializers import (
+    insight_detail,
+    insight_evidence_link_out,
+    insight_evidence_response,
+    insight_is_reused,
+    insight_summary,
+    insight_traceability,
+    user_map,
+)
 
 router = APIRouter(prefix="/insights", tags=["insights"])
 
@@ -130,7 +144,12 @@ def create_insight(
                 details={"evidence_id": evidence_id},
             )
         db.add(
-            InsightEvidence(insight_id=insight.id, evidence_id=evidence.id, role="supporting")
+            InsightEvidence(
+                insight_id=insight.id,
+                evidence_id=evidence.id,
+                role="supporting",
+                created_by_id=actor.id if actor else None,
+            )
         )
 
     log_activity(
@@ -203,6 +222,45 @@ def update_insight(
     return insight_detail(db, insight)
 
 
+def _resolve_relationship(db: Session, insight_id: str, identifier: str) -> InsightEvidence:
+    """Find one relationship by relationship id, falling back to evidence id.
+
+    A unique constraint allows at most one relationship per insight/evidence
+    pair, so the evidence id is a valid natural key too. Accepting both keeps the
+    original ``DELETE /insights/{id}/evidence/{evidence_id}`` call sites working
+    while the UI moves to relationship ids.
+    """
+    link = db.execute(
+        select(InsightEvidence).where(
+            InsightEvidence.insight_id == insight_id, InsightEvidence.id == identifier
+        )
+    ).scalar_one_or_none()
+    if link is None:
+        link = db.execute(
+            select(InsightEvidence).where(
+                InsightEvidence.insight_id == insight_id,
+                InsightEvidence.evidence_id == identifier,
+            )
+        ).scalar_one_or_none()
+    if link is None:
+        raise NotFoundError("That evidence relationship does not exist on this insight.")
+    return link
+
+
+def _validate_link(db: Session, insight: Insight, evidence: Evidence) -> None:
+    """Every rule that decides whether two records may be related."""
+    if insight.project_id and evidence.project_id != insight.project_id:
+        raise RuleViolationError(
+            "Evidence from a different research project cannot be linked to this insight.",
+            details={"evidence_id": evidence.id, "evidence_project_id": evidence.project_id},
+        )
+    if not evidence.content.strip():
+        raise RuleViolationError(
+            "That evidence has no customer statement, so it cannot support or contradict anything.",
+            details={"evidence_id": evidence.id},
+        )
+
+
 @router.post("/{insight_id}/evidence", response_model=InsightDetail, status_code=status.HTTP_201_CREATED)
 def link_evidence(
     insight_id: str,
@@ -216,11 +274,7 @@ def link_evidence(
     evidence = db.get(Evidence, payload.evidence_id)
     if evidence is None:
         raise NotFoundError(f"Evidence '{payload.evidence_id}' does not exist.")
-    if insight.project_id and evidence.project_id != insight.project_id:
-        raise RuleViolationError(
-            "Evidence from a different research project cannot be linked to this insight.",
-            details={"evidence_id": evidence.id},
-        )
+    _validate_link(db, insight, evidence)
 
     existing = db.execute(
         select(InsightEvidence).where(
@@ -228,23 +282,32 @@ def link_evidence(
         )
     ).scalar_one_or_none()
     if existing:
-        raise ConflictError("That evidence is already linked to this insight.")
-
-    db.add(
-        InsightEvidence(
-            insight_id=insight.id,
-            evidence_id=evidence.id,
-            role=payload.role.value,
-            note=payload.note,
+        raise ConflictError(
+            "That evidence is already linked to this insight. Update the existing relationship instead.",
+            details={"relationship_id": existing.id, "classification": existing.role},
         )
+
+    link = InsightEvidence(
+        insight_id=insight.id,
+        evidence_id=evidence.id,
+        role=payload.role.value,
+        note=payload.note,
+        rationale=payload.rationale.strip(),
+        confidence=payload.confidence.value if payload.confidence else None,
+        tags=payload.tags,
+        created_by_id=actor.id if actor else None,
     )
+    db.add(link)
     log_activity(
         db,
         entity_type="insight",
         entity_id=insight.id,
         entity_label=insight.title,
         verb="linked",
-        summary=f"{evidence.code} linked as {payload.role.value} evidence.",
+        summary=(
+            f"{evidence.code} linked as {payload.role.value} evidence"
+            + (f": {payload.rationale.strip()[:160]}" if payload.rationale.strip() else ".")
+        ),
         actor_id=actor.id if actor else None,
         project_id=insight.project_id,
     )
@@ -253,18 +316,120 @@ def link_evidence(
     return insight_detail(db, insight)
 
 
-@router.delete("/{insight_id}/evidence/{evidence_id}", response_model=Message)
-def unlink_evidence(insight_id: str, evidence_id: str, db: Session = Depends(get_db)) -> Message:
-    link = db.execute(
-        select(InsightEvidence).where(
-            InsightEvidence.insight_id == insight_id, InsightEvidence.evidence_id == evidence_id
+@router.get("/{insight_id}/evidence", response_model=InsightEvidenceResponse)
+def list_insight_evidence(insight_id: str, db: Session = Depends(get_db)) -> InsightEvidenceResponse:
+    """Evidence grouped by the researcher's own classification."""
+    insight = db.get(Insight, insight_id)
+    if insight is None:
+        raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    return insight_evidence_response(db, insight)
+
+
+@router.patch("/{insight_id}/evidence/{relationship_id}", response_model=RelationshipWriteResponse)
+def update_evidence_relationship(
+    insight_id: str,
+    relationship_id: str,
+    payload: EvidenceLinkUpdate,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> RelationshipWriteResponse:
+    """Re-classify or re-explain a relationship.
+
+    Only the relationship changes. The evidence row and the customer statement
+    are never touched, so a re-classification cannot rewrite history.
+    """
+    insight = db.get(Insight, insight_id)
+    if insight is None:
+        raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    link = _resolve_relationship(db, insight.id, relationship_id)
+    evidence = db.get(Evidence, link.evidence_id)
+    if evidence is None:
+        raise NotFoundError("The linked evidence no longer exists.")
+
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise RuleViolationError(
+            "Provide at least one field to change (classification, rationale, confidence or tags)."
         )
-    ).scalar_one_or_none()
-    if link is None:
-        raise NotFoundError("That evidence is not linked to this insight.")
+
+    previous = link.role
+    if "role" in data and data["role"] is not None:
+        previous = link.role
+        link.role = data["role"].value if hasattr(data["role"], "value") else data["role"]
+    if "rationale" in data and data["rationale"] is not None:
+        link.rationale = data["rationale"].strip()
+    if "confidence" in data:
+        link.confidence = data["confidence"].value if data["confidence"] else None
+    if "tags" in data and data["tags"] is not None:
+        link.tags = data["tags"]
+    if "note" in data and data["note"] is not None:
+        link.note = data["note"]
+
+    log_activity(
+        db,
+        entity_type="insight",
+        entity_id=insight.id,
+        entity_label=insight.title,
+        verb="relationship_updated",
+        summary=(
+            f"{evidence.code} re-classified from {previous} to {link.role}."
+            if previous != link.role
+            else f"Relationship metadata for {evidence.code} updated: {', '.join(sorted(data))}."
+        ),
+        actor_id=actor.id if actor else None,
+        project_id=insight.project_id,
+    )
+    db.commit()
+    db.refresh(link)
+    return RelationshipWriteResponse(
+        relationship=insight_evidence_link_out(db, link, user_map(db, {link.created_by_id})),
+        message="Relationship updated. The customer statement was not changed.",
+    )
+
+
+@router.delete("/{insight_id}/evidence/{relationship_id}", response_model=Message)
+def unlink_evidence(
+    insight_id: str,
+    relationship_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> Message:
+    insight = db.get(Insight, insight_id)
+    if insight is None:
+        raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    link = _resolve_relationship(db, insight.id, relationship_id)
+    evidence = db.get(Evidence, link.evidence_id)
+    evidence_code = evidence.code if evidence else "unknown evidence"
+
+    # Written before the delete: the audit entry must survive the relationship.
+    log_activity(
+        db,
+        entity_type="insight",
+        entity_id=insight.id,
+        entity_label=insight.title,
+        verb="unlinked",
+        summary=(
+            f"{evidence_code} removed as {link.role} evidence. "
+            "The evidence record and the original customer statement are unchanged."
+        ),
+        actor_id=actor.id if actor else None,
+        project_id=insight.project_id,
+    )
     db.delete(link)
     db.commit()
-    return Message(message="Evidence unlinked.", detail="The evidence record itself is unchanged.")
+    return Message(
+        message="Evidence unlinked.",
+        detail="The relationship was removed and logged. The evidence record itself is unchanged.",
+    )
+
+
+@router.get("/{insight_id}/traceability", response_model=InsightTraceability)
+def get_traceability(insight_id: str, db: Session = Depends(get_db)) -> InsightTraceability:
+    """The complete chain for one insight, including where it was used."""
+    insight = db.get(Insight, insight_id)
+    if insight is None:
+        raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    return insight_traceability(db, insight)
 
 
 @router.get("/{insight_id}/related", response_model=list[SearchResult])

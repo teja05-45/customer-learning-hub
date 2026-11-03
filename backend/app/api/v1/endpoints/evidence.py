@@ -17,9 +17,10 @@ from app.core.errors import NotFoundError, RuleViolationError
 from app.models import Evidence, InsightEvidence, Interview, Participant, User
 from app.schemas.common import Message
 from app.schemas.evidence import EvidenceCreate, EvidenceListResponse, EvidenceOut, EvidenceStats, EvidenceUpdate
+from app.schemas.traceability import EvidenceInsightsResponse
 from app.services.activity import log_activity
 from app.services.common import next_code
-from app.services.serializers import evidence_out
+from app.services.serializers import evidence_insights, evidence_out
 
 router = APIRouter(prefix="/evidence", tags=["evidence"])
 
@@ -35,10 +36,13 @@ def list_evidence(
     segment: str | None = Query(default=None),
     q: str | None = Query(default=None, max_length=120),
     unverified_only: bool = Query(default=False),
+    feedback_record_id: str | None = Query(default=None),
 ) -> EvidenceListResponse:
     stmt = select(Evidence)
     if project_id:
         stmt = stmt.where(Evidence.project_id == project_id)
+    if feedback_record_id:
+        stmt = stmt.where(Evidence.feedback_record_id == feedback_record_id)
     if interview_id:
         stmt = stmt.where(Evidence.interview_id == interview_id)
     if participant_id:
@@ -163,6 +167,15 @@ def get_evidence(evidence_id: str, db: Session = Depends(get_db)) -> EvidenceOut
     return evidence_out(db, evidence)
 
 
+@router.get("/{evidence_id}/insights", response_model=EvidenceInsightsResponse)
+def list_evidence_insights(evidence_id: str, db: Session = Depends(get_db)) -> EvidenceInsightsResponse:
+    """Every insight this item supports, contradicts or contextualises."""
+    evidence = db.get(Evidence, evidence_id)
+    if evidence is None:
+        raise NotFoundError(f"Evidence '{evidence_id}' does not exist.")
+    return evidence_insights(db, evidence)
+
+
 @router.patch("/{evidence_id}", response_model=EvidenceOut)
 def update_evidence(
     evidence_id: str,
@@ -191,13 +204,30 @@ def update_evidence(
 
 
 @router.delete("/{evidence_id}", response_model=Message)
-def delete_evidence(evidence_id: str, db: Session = Depends(get_db)) -> Message:
+def delete_evidence(
+    evidence_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> Message:
     evidence = db.get(Evidence, evidence_id)
     if evidence is None:
         raise NotFoundError(f"Evidence '{evidence_id}' does not exist.")
     linked = db.execute(
         select(func.count(InsightEvidence.id)).where(InsightEvidence.evidence_id == evidence.id)
     ).scalar_one()
+    log_activity(
+        db,
+        entity_type="evidence",
+        entity_id=None,
+        entity_label=f"{evidence.code} · evidence",
+        verb="deleted",
+        summary=(
+            f"Evidence {evidence.code} deleted by {actor.name if actor else 'an unknown user'}; "
+            f"{linked} insight link(s) removed with it."
+        ),
+        actor_id=actor.id if actor else None,
+        project_id=evidence.project_id,
+    )
     db.delete(evidence)
     db.commit()
     return Message(
