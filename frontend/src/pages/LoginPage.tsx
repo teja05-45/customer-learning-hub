@@ -94,12 +94,12 @@ export function LoginPage() {
       <aside className="login-aside">
         <div>
           <div className="inline" style={{ gap: 10 }}>
-            <div className="brand-mark" style={{ background: '#fff', color: 'var(--clh-navy)' }}>
+            <div className="brand-mark" style={{ background: 'var(--clh-gold)', color: 'var(--clh-chrome)' }}>
               CL
             </div>
             <div>
-              <div style={{ color: '#fff', fontWeight: 650, fontSize: 13.5 }}>Customer Learning Hub</div>
-              <div style={{ color: '#94a3b8', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              <div style={{ color: 'var(--clh-chrome-ink)', fontWeight: 650, fontSize: 13.5 }}>Customer Learning Hub</div>
+              <div style={{ color: 'var(--clh-chrome-muted)', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                 Everyday Goods
               </div>
             </div>
@@ -115,7 +115,7 @@ export function LoginPage() {
           <div className="login-value-list mt-4">
             {VALUE_POINTS.map((point) => (
               <div className="login-value" key={point.title}>
-                <point.icon size={16} style={{ marginTop: 2, flex: 'none', color: '#93b4f5' }} />
+                <point.icon size={16} style={{ marginTop: 2, flex: 'none', color: 'var(--clh-gold)' }} />
                 <div>
                   <strong>{point.title}</strong>
                   {point.body}
@@ -126,7 +126,7 @@ export function LoginPage() {
         </div>
 
         <div className="login-value" style={{ position: 'relative', zIndex: 1 }}>
-          <ShieldCheck size={16} style={{ marginTop: 2, flex: 'none', color: '#93b4f5' }} />
+          <ShieldCheck size={16} style={{ marginTop: 2, flex: 'none', color: 'var(--clh-gold)' }} />
           <div>
             <strong>This prototype contains synthetic data only.</strong>
             No customer is contacted, no Everyday Goods system is connected, and no audio is recorded. Names,

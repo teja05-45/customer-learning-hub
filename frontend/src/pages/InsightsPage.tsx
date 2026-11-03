@@ -254,7 +254,7 @@ export function InsightsPage() {
 
                   <div
                     className="row-between mt-3"
-                    style={{ borderTop: '1px solid #eef2f7', paddingTop: 10, fontSize: 11.5, color: 'var(--clh-text-secondary)' }}
+                    style={{ borderTop: '1px solid var(--clh-border)', paddingTop: 10, fontSize: 11.5, color: 'var(--clh-text-secondary)' }}
                   >
                     <div className="inline" style={{ gap: 14 }}>
                       <span>

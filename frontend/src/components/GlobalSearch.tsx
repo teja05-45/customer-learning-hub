@@ -10,7 +10,7 @@ const ENTITY_ICON_COLOUR: Record<string, string> = {
   participant: 'var(--clh-info)',
   interview: 'var(--clh-purple)',
   evidence: 'var(--clh-warning)',
-  insight: '#0891b2',
+  insight: '#b08028',
   decision: 'var(--clh-success)',
   action: 'var(--clh-text-secondary)',
 }
@@ -184,7 +184,7 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
                         width: 6,
                         height: 6,
                         borderRadius: 99,
-                        background: ENTITY_ICON_COLOUR[result.entity_type] ?? '#94a3b8',
+                        background: ENTITY_ICON_COLOUR[result.entity_type] ?? '#9a9f94',
                         flex: 'none',
                       }}
                     />

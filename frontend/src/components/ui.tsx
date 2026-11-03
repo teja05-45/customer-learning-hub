@@ -254,7 +254,7 @@ export function ProgressBar({ value, tone = 'blue' }: { value: number; tone?: 'b
   const colour =
     tone === 'green' ? 'var(--clh-success)' : tone === 'amber' ? 'var(--clh-warning)' : 'var(--clh-primary)'
   return (
-    <div style={{ height: 6, background: '#eef2f7', borderRadius: 999, overflow: 'hidden' }}>
+    <div style={{ height: 6, background: 'var(--clh-border)', borderRadius: 999, overflow: 'hidden' }}>
       <div
         style={{
           width: `${Math.max(0, Math.min(100, value))}%`,

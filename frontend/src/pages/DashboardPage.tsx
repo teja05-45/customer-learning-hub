@@ -45,7 +45,7 @@ import {
   titleCase,
 } from '../utils/format'
 
-const CHART_COLOURS = ['#2563eb', '#0284c7', '#6d28d9', '#d97706', '#16a34a']
+const CHART_COLOURS = ['#176b52', '#2f6b7a', '#b08028', '#b44a32', '#6b4e7a']
 
 export function DashboardPage() {
   const { data, isLoading, error, refetch } = useQuery({
@@ -289,23 +289,23 @@ export function DashboardPage() {
               <AreaChart data={data.timeline} margin={{ top: 6, right: 6, bottom: 0, left: -18 }}>
                 <defs>
                   <linearGradient id="evidenceFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#2563eb" stopOpacity={0.22} />
-                    <stop offset="100%" stopColor="#2563eb" stopOpacity={0.02} />
+                    <stop offset="0%" stopColor="#176b52" stopOpacity={0.22} />
+                    <stop offset="100%" stopColor="#176b52" stopOpacity={0.02} />
                   </linearGradient>
                   <linearGradient id="interviewFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0284c7" stopOpacity={0.16} />
-                    <stop offset="100%" stopColor="#0284c7" stopOpacity={0.02} />
+                    <stop offset="0%" stopColor="#2f6b7a" stopOpacity={0.16} />
+                    <stop offset="100%" stopColor="#2f6b7a" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="#eef2f7" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                <CartesianGrid stroke="#edeae0" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6a6f65' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#6a6f65' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e7e5dc' }} />
                 <Area
                   type="monotone"
                   dataKey="evidence"
                   name="Evidence captured"
-                  stroke="#2563eb"
+                  stroke="#176b52"
                   strokeWidth={2}
                   fill="url(#evidenceFill)"
                 />
@@ -313,7 +313,7 @@ export function DashboardPage() {
                   type="monotone"
                   dataKey="interviews"
                   name="Interviews completed"
-                  stroke="#0284c7"
+                  stroke="#2f6b7a"
                   strokeWidth={2}
                   fill="url(#interviewFill)"
                 />
@@ -321,7 +321,7 @@ export function DashboardPage() {
                   type="monotone"
                   dataKey="insights"
                   name="Insights created"
-                  stroke="#6d28d9"
+                  stroke="#b08028"
                   strokeWidth={2}
                   fill="transparent"
                   strokeDasharray="4 3"
@@ -330,9 +330,9 @@ export function DashboardPage() {
             </ResponsiveContainer>
           </div>
           <div className="inline mt-2" style={{ gap: 14, fontSize: 11.5, color: 'var(--clh-text-secondary)' }}>
-            <span className="inline"><span style={{ width: 8, height: 8, background: '#2563eb', borderRadius: 2 }} /> Evidence</span>
-            <span className="inline"><span style={{ width: 8, height: 8, background: '#0284c7', borderRadius: 2 }} /> Interviews</span>
-            <span className="inline"><span style={{ width: 8, height: 8, background: '#6d28d9', borderRadius: 2 }} /> Insights</span>
+            <span className="inline"><span style={{ width: 8, height: 8, background: '#176b52', borderRadius: 2 }} /> Evidence</span>
+            <span className="inline"><span style={{ width: 8, height: 8, background: '#2f6b7a', borderRadius: 2 }} /> Interviews</span>
+            <span className="inline"><span style={{ width: 8, height: 8, background: '#b08028', borderRadius: 2 }} /> Insights</span>
           </div>
         </SectionCard>
 

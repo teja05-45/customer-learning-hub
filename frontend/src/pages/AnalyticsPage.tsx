@@ -122,13 +122,13 @@ export function AnalyticsPage() {
                   }))}
                   margin={{ top: 8, right: 8, bottom: 0, left: -18 }}
                 >
-                  <CartesianGrid stroke="#eef2f7" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 10.5, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={0} />
-                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }} />
-                  <Bar dataKey="participants" name="Participants" fill="#c7d7fb" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="interviews" name="Interviews" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="evidence" name="Evidence" fill="#0284c7" radius={[4, 4, 0, 0]} />
+                  <CartesianGrid stroke="#edeae0" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10.5, fill: '#6a6f65' }} axisLine={false} tickLine={false} interval={0} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6a6f65' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e7e5dc' }} />
+                  <Bar dataKey="participants" name="Participants" fill="#d8e3db" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="interviews" name="Interviews" fill="#176b52" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="evidence" name="Evidence" fill="#2f6b7a" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
