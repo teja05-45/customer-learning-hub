@@ -16,6 +16,7 @@ from app.models import (
     BusinessAction,
     Decision,
     Evidence,
+    FeedbackRecord,
     Insight,
     Interview,
     OrganizationSetting,
@@ -211,6 +212,21 @@ EXPORT_SPECS = {
     "evidence": (
         Evidence,
         ["code", "evidence_type", "content", "interpretation", "segment", "provenance", "provenance_status", "captured_at"],
+    ),
+    "feedback": (
+        FeedbackRecord,
+        [
+            "code",
+            "source_type",
+            "collection_method",
+            "source_reference",
+            "collected_at",
+            "contributor",
+            "content",
+            "interpretation",
+            "context",
+            "verification_status",
+        ],
     ),
     "insights": (
         Insight,

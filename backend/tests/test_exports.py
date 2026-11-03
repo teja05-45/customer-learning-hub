@@ -18,6 +18,7 @@ ENTITIES = [
     "recruitment",
     "interviews",
     "evidence",
+    "feedback",
     "insights",
     "decisions",
     "actions",
