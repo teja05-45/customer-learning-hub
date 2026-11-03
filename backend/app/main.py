@@ -16,6 +16,7 @@ from app.core.database import SessionLocal, init_db
 from app.core.errors import AppError
 from app.core.logging import configure_logging, get_logger
 from app.models import User
+from app.seed.demo_data import seed_demo_data
 configure_logging()
 logger = get_logger("app.startup")
 
@@ -23,6 +24,17 @@ logger = get_logger("app.startup")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # SEED_ON_STARTUP/SEED_DEMO_DATA are set by compose so a fresh volume comes
+    # up with the synthetic dataset. Without this the documented first start
+    # created an empty workspace and demonstration entry had nobody to sign in
+    # as. Seeding is idempotent: it is skipped once any user exists.
+    if settings.seed_on_startup and settings.seed_demo_data:
+        db = SessionLocal()
+        try:
+            counts = seed_demo_data(db)
+            logger.info("Synthetic dataset ready: %s", counts)
+        finally:
+            db.close()
     logger.info("API ready (environment=%s, demo_mode=%s)", settings.environment, settings.demo_mode)
     yield
 
