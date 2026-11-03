@@ -215,7 +215,7 @@ test('a complete research-to-decision journey is visible and editable in the UI'
 
   // Evidence review and provenance correction are available on the record.
   await page.goto(`/evidence/${quote.id}`)
-  await expect(page.getByText('Source verified')).toBeVisible()
+  await expect(page.getByText('Source verified').first()).toBeVisible()
   await page.getByRole('button', { name: 'Reviewed', exact: true }).click()
   await expect(page.getByText('Review status set to Reviewed')).toBeVisible()
   await page.getByRole('button', { name: 'Correct provenance' }).click()
@@ -227,7 +227,7 @@ test('a complete research-to-decision journey is visible and editable in the UI'
   // The decision shows the insight, the evidence and the owner's action.
   await page.goto(`/decisions/${decision.id}`)
   await expect(page.getByRole('heading', { level: 1 })).toContainText('test retail fragrance')
-  await expect(page.getByText('E2E: run the matched fragrance trial')).toBeVisible()
+  await expect(page.getByText('E2E: run the matched fragrance trial').first()).toBeVisible()
 
   // Search finds the insight and links to its evidence.
   await page.goto('/overview')
