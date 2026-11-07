@@ -8,10 +8,20 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_actor
 from app.core.database import get_db
-from app.core.errors import NotFoundError
+from app.core.errors import NotFoundError, RuleViolationError
 from app.models import BusinessAction, Decision, Insight, User
 from app.schemas.common import Message
 from app.schemas.decision import ActionCreate, ActionListResponse, ActionOut, ActionUpdate
+from app.services.access import (
+    assert_entity_read,
+    assert_entity_write,
+    is_workspace_admin,
+    project_of_action,
+    project_of_decision,
+    project_of_insight,
+    require_actor,
+    visible_project_ids,
+)
 from app.services.activity import log_activity
 from app.services.common import next_code
 from app.services.serializers import action_out
@@ -22,6 +32,7 @@ router = APIRouter(prefix="/actions", tags=["actions"])
 @router.get("", response_model=ActionListResponse)
 def list_actions(
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
     action_status: list[str] | None = Query(default=None, alias="status"),
     owner_id: str | None = Query(default=None),
     decision_id: str | None = Query(default=None),
@@ -29,7 +40,23 @@ def list_actions(
     overdue_only: bool = Query(default=False),
     due_before: date | None = Query(default=None),
 ) -> ActionListResponse:
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
     stmt = select(BusinessAction)
+    if allowed is not None:
+        if not allowed:
+            return ActionListResponse(items=[], total=0, status_counts={}, overdue=0)
+        # An action inherits scope from the decision or insight it serves.
+        stmt = stmt.where(
+            or_(
+                BusinessAction.decision_id.in_(
+                    select(Decision.id).where(Decision.project_id.in_(allowed))
+                ),
+                BusinessAction.insight_id.in_(
+                    select(Insight.id).where(Insight.project_id.in_(allowed))
+                ),
+            )
+        )
     if action_status:
         stmt = stmt.where(BusinessAction.status.in_(action_status))
     if owner_id:
@@ -54,9 +81,9 @@ def list_actions(
         stmt.order_by(BusinessAction.due_date.asc().nulls_last(), BusinessAction.created_at.desc())
     ).scalars().unique().all()
     items = [action_out(db, a) for a in rows]
-    status_counts = dict(
-        db.execute(select(BusinessAction.status, func.count(BusinessAction.id)).group_by(BusinessAction.status)).all()
-    )
+    status_counts: dict[str, int] = {}
+    for item in items:
+        status_counts[item.status] = status_counts.get(item.status, 0) + 1
     return ActionListResponse(
         items=items,
         total=len(items),
@@ -71,10 +98,23 @@ def create_action(
     db: Session = Depends(get_db),
     actor: User | None = Depends(get_actor),
 ) -> ActionOut:
-    if payload.decision_id and db.get(Decision, payload.decision_id) is None:
-        raise NotFoundError("That decision does not exist.")
-    if payload.insight_id and db.get(Insight, payload.insight_id) is None:
-        raise NotFoundError("That insight does not exist.")
+    creator = require_actor(actor)
+    project_id = None
+    if payload.decision_id:
+        project_id = project_of_decision(db, payload.decision_id)
+        if db.get(Decision, payload.decision_id) is None:
+            raise NotFoundError("That decision does not exist.")
+        assert_entity_write(db, creator, project_id)
+    if payload.insight_id:
+        insight_project = project_of_insight(db, payload.insight_id)
+        if db.get(Insight, payload.insight_id) is None:
+            raise NotFoundError("That insight does not exist.")
+        assert_entity_write(db, creator, insight_project)
+        project_id = project_id or insight_project
+    if payload.decision_id and payload.insight_id and project_of_insight(db, payload.insight_id) != project_of_decision(db, payload.decision_id):
+        raise RuleViolationError("An action cannot link a decision and an insight from different projects.")
+    if project_id is None and not is_workspace_admin(creator):
+        raise RuleViolationError("An action must belong to a project you can access.")
     if payload.owner_id and db.get(User, payload.owner_id) is None:
         raise NotFoundError("That action owner does not exist.")
 
@@ -90,10 +130,6 @@ def create_action(
         insight_id=payload.insight_id,
     )
     db.add(action)
-    project_id = None
-    if payload.decision_id:
-        decision = db.get(Decision, payload.decision_id)
-        project_id = decision.project_id if decision else None
     log_activity(
         db,
         entity_type="action",
@@ -110,10 +146,15 @@ def create_action(
 
 
 @router.get("/{action_id}", response_model=ActionOut)
-def get_action(action_id: str, db: Session = Depends(get_db)) -> ActionOut:
+def get_action(
+    action_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> ActionOut:
     action = db.get(BusinessAction, action_id)
     if action is None:
         raise NotFoundError(f"Action '{action_id}' does not exist.")
+    assert_entity_read(db, actor, project_of_action(db, action_id))
     return action_out(db, action)
 
 
@@ -127,6 +168,7 @@ def update_action(
     action = db.get(BusinessAction, action_id)
     if action is None:
         raise NotFoundError(f"Action '{action_id}' does not exist.")
+    assert_entity_write(db, actor, project_of_action(db, action_id))
     data = payload.model_dump(exclude_unset=True)
     if data.get("owner_id") and db.get(User, data["owner_id"]) is None:
         raise NotFoundError("That action owner does not exist.")
@@ -160,10 +202,15 @@ def update_action(
 
 
 @router.delete("/{action_id}", response_model=Message)
-def delete_action(action_id: str, db: Session = Depends(get_db)) -> Message:
+def delete_action(
+    action_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> Message:
     action = db.get(BusinessAction, action_id)
     if action is None:
         raise NotFoundError(f"Action '{action_id}' does not exist.")
+    assert_entity_write(db, actor, project_of_action(db, action_id))
     db.delete(action)
     db.commit()
     return Message(message="Action deleted.", detail="The decision it belonged to is unchanged.")

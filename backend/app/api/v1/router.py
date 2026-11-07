@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     feedback,
     insights,
     interviews,
+    outcomes,
     participants,
     projects,
     recruitment,
@@ -30,3 +31,4 @@ api_router.include_router(feedback.router)
 api_router.include_router(insights.router)
 api_router.include_router(decisions.router)
 api_router.include_router(actions.router)
+api_router.include_router(outcomes.router)

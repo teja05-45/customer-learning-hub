@@ -1,5 +1,6 @@
 """ORM models. Importing this package registers all metadata."""
 
+from app.models.access import ProjectMembership
 from app.models.base import new_id, utcnow
 from app.models.decisions import (
     BusinessAction,
@@ -9,6 +10,7 @@ from app.models.decisions import (
     Insight,
     InsightEvidence,
     OrganizationSetting,
+    Outcome,
 )
 from app.models.enums import (
     DECISION_TRANSITIONS,
@@ -27,7 +29,10 @@ from app.models.enums import (
     FeedbackSourceType,
     InsightStatus,
     InterviewStatus,
+    OutcomeDirection,
+    OutcomeStatus,
     Priority,
+    ProjectRole,
     ProjectStatus,
     ProvenanceStatus,
     RecruitmentStage,
@@ -76,8 +81,13 @@ __all__ = [
     "InterviewGuideQuestion",
     "InterviewStatus",
     "OrganizationSetting",
+    "Outcome",
+    "OutcomeDirection",
+    "OutcomeStatus",
     "Participant",
     "Priority",
+    "ProjectMembership",
+    "ProjectRole",
     "ProjectStatus",
     "ProvenanceStatus",
     "RECRUITMENT_TRANSITIONS",

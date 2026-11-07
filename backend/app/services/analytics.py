@@ -51,10 +51,19 @@ def _median(values: list[float]) -> float | None:
     return (ordered[mid - 1] + ordered[mid]) / 2
 
 
-def build_analytics(db: Session) -> AnalyticsResponse:
-    insights = db.execute(select(Insight)).scalars().all()
-    decisions = db.execute(select(Decision)).scalars().all()
-    actions = db.execute(select(BusinessAction)).scalars().all()
+def _visible(column, project_ids: set[str] | None) -> list:
+    return [] if project_ids is None else [column.in_(project_ids)]
+
+
+def build_analytics(db: Session, project_ids: set[str] | None = None) -> AnalyticsResponse:
+    insights = db.execute(select(Insight).where(*_visible(Insight.project_id, project_ids))).scalars().all()
+    decisions = db.execute(select(Decision).where(*_visible(Decision.project_id, project_ids))).scalars().all()
+    action_stmt = select(BusinessAction)
+    if project_ids is not None:
+        action_stmt = action_stmt.where(
+            BusinessAction.decision_id.in_(select(Decision.id).where(Decision.project_id.in_(project_ids)))
+        )
+    actions = db.execute(action_stmt).scalars().all()
 
     reused = [i for i in insights if insight_is_reused(db, i)]
     with_evidence = [
@@ -87,22 +96,38 @@ def build_analytics(db: Session) -> AnalyticsResponse:
             gaps.append((decision_at - evidence_at).total_seconds() / 86400)
 
     invitations = db.execute(
-        select(func.count(RecruitmentRecord.id)).where(RecruitmentRecord.invited_at.is_not(None))
+        select(func.count(RecruitmentRecord.id)).where(
+            RecruitmentRecord.invited_at.is_not(None),
+            *_visible(RecruitmentRecord.project_id, project_ids),
+        )
     ).scalar_one()
     responses = db.execute(
-        select(func.count(RecruitmentRecord.id)).where(RecruitmentRecord.responded_at.is_not(None))
+        select(func.count(RecruitmentRecord.id)).where(
+            RecruitmentRecord.responded_at.is_not(None),
+            *_visible(RecruitmentRecord.project_id, project_ids),
+        )
     ).scalar_one()
     interviews_completed = db.execute(
-        select(func.count(Interview.id)).where(Interview.status == "completed")
+        select(func.count(Interview.id)).where(
+            Interview.status == "completed", *_visible(Interview.project_id, project_ids)
+        )
     ).scalar_one()
-    evidence_total = db.execute(select(func.count(Evidence.id))).scalar_one()
+    evidence_total = db.execute(
+        select(func.count(Evidence.id)).where(*_visible(Evidence.project_id, project_ids))
+    ).scalar_one()
     unverified = db.execute(
-        select(func.count(Evidence.id)).where(Evidence.provenance_status != "recorded")
+        select(func.count(Evidence.id)).where(
+            Evidence.provenance_status != "recorded", *_visible(Evidence.project_id, project_ids)
+        )
     ).scalar_one()
     unresolved = db.execute(
-        select(func.count(ResearchQuestion.id)).where(ResearchQuestion.is_resolved.is_(False))
+        select(func.count(ResearchQuestion.id)).where(
+            ResearchQuestion.is_resolved.is_(False), *_visible(ResearchQuestion.project_id, project_ids)
+        )
     ).scalar_one()
-    questions_total = db.execute(select(func.count(ResearchQuestion.id))).scalar_one()
+    questions_total = db.execute(
+        select(func.count(ResearchQuestion.id)).where(*_visible(ResearchQuestion.project_id, project_ids))
+    ).scalar_one()
 
     median_gap = _median(gaps)
 
@@ -223,18 +248,33 @@ def build_analytics(db: Session) -> AnalyticsResponse:
         ),
     ]
 
-    participant_counts = dict(
-        db.execute(select(Participant.segment, func.count(Participant.id)).group_by(Participant.segment)).all()
-    )
+    if project_ids is None:
+        participant_counts = dict(
+            db.execute(select(Participant.segment, func.count(Participant.id)).group_by(Participant.segment)).all()
+        )
+    else:
+        participant_counts = dict(
+            db.execute(
+                select(Participant.segment, func.count(func.distinct(Participant.id)))
+                .join(RecruitmentRecord, RecruitmentRecord.participant_id == Participant.id)
+                .where(RecruitmentRecord.project_id.in_(project_ids))
+                .group_by(Participant.segment)
+            ).all()
+        )
     interview_counts = dict(
         db.execute(
             select(Participant.segment, func.count(Interview.id))
             .join(Participant, Participant.id == Interview.participant_id)
+            .where(*_visible(Interview.project_id, project_ids))
             .group_by(Participant.segment)
         ).all()
     )
     evidence_counts = dict(
-        db.execute(select(Evidence.segment, func.count(Evidence.id)).group_by(Evidence.segment)).all()
+        db.execute(
+            select(Evidence.segment, func.count(Evidence.id))
+            .where(*_visible(Evidence.project_id, project_ids))
+            .group_by(Evidence.segment)
+        ).all()
     )
     segment_distribution = [
         SegmentPoint(
@@ -249,20 +289,30 @@ def build_analytics(db: Session) -> AnalyticsResponse:
     decision_funnel = [
         StatusCount(status=status, count=count)
         for status, count in db.execute(
-            select(Decision.status, func.count(Decision.id)).group_by(Decision.status)
+            select(Decision.status, func.count(Decision.id))
+            .where(*_visible(Decision.project_id, project_ids))
+            .group_by(Decision.status)
         ).all()
     ]
+    action_completion_stmt = select(BusinessAction.status, func.count(BusinessAction.id))
+    if project_ids is not None:
+        action_completion_stmt = action_completion_stmt.where(
+            BusinessAction.decision_id.in_(select(Decision.id).where(Decision.project_id.in_(project_ids)))
+        )
     action_completion = [
         StatusCount(status=status, count=count)
         for status, count in db.execute(
-            select(BusinessAction.status, func.count(BusinessAction.id)).group_by(BusinessAction.status)
+            action_completion_stmt.group_by(BusinessAction.status)
         ).all()
     ]
 
     unresolved_rows = db.execute(
         select(ResearchQuestion, ResearchProject)
         .join(ResearchProject, ResearchProject.id == ResearchQuestion.project_id)
-        .where(ResearchQuestion.is_resolved.is_(False))
+        .where(
+            ResearchQuestion.is_resolved.is_(False),
+            *_visible(ResearchQuestion.project_id, project_ids),
+        )
     ).all()
 
     reuse_detail = []

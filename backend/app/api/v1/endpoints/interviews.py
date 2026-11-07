@@ -36,6 +36,14 @@ from app.schemas.interview import (
     InterviewSummary,
     InterviewUpdate,
 )
+from app.services.access import (
+    assert_entity_read,
+    assert_entity_write,
+    assert_project_read,
+    assert_project_write,
+    require_actor,
+    visible_project_ids,
+)
 from app.services.activity import log_activity
 from app.services.common import next_code
 from app.services.pipeline import advance_stage
@@ -62,6 +70,7 @@ def default_guide() -> dict:
 @router.get("", response_model=InterviewListResponse)
 def list_interviews(
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
     project_id: str | None = Query(default=None),
     participant_id: str | None = Query(default=None),
     interviewer_id: str | None = Query(default=None),
@@ -69,8 +78,15 @@ def list_interviews(
     q: str | None = Query(default=None, max_length=120),
     upcoming_only: bool = Query(default=False),
 ) -> InterviewListResponse:
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
     stmt = select(Interview)
+    if allowed is not None:
+        if not allowed:
+            return InterviewListResponse(items=[], total=0, status_counts={})
+        stmt = stmt.where(Interview.project_id.in_(allowed))
     if project_id:
+        assert_project_read(db, user, project_id)
         stmt = stmt.where(Interview.project_id == project_id)
     if participant_id:
         stmt = stmt.where(Interview.participant_id == participant_id)
@@ -90,9 +106,9 @@ def list_interviews(
 
     stmt = stmt.order_by(Interview.scheduled_at.desc().nulls_last())
     rows = db.execute(stmt).scalars().unique().all()
-    status_counts = dict(
-        db.execute(select(Interview.status, func.count(Interview.id)).group_by(Interview.status)).all()
-    )
+    status_counts: dict[str, int] = {}
+    for row in rows:
+        status_counts[row.status] = status_counts.get(row.status, 0) + 1
     return InterviewListResponse(
         items=[interview_summary(db, i) for i in rows],
         total=len(rows),
@@ -109,9 +125,15 @@ def create_interview(
     project = db.get(ResearchProject, payload.project_id)
     if project is None:
         raise NotFoundError("That research project does not exist.")
+    assert_project_write(db, actor, project.id)
     participant = db.get(Participant, payload.participant_id)
     if participant is None:
         raise NotFoundError("That participant does not exist.")
+    if participant.contact_consent in ("withdrawn", "declined"):
+        raise RuleViolationError(
+            "This participant has withdrawn or declined research contact. A new session cannot be booked.",
+            details={"status": "not_bookable", "contact_consent": participant.contact_consent},
+        )
     if payload.interviewer_id and db.get(User, payload.interviewer_id) is None:
         raise NotFoundError("That interviewer does not exist.")
 
@@ -177,10 +199,15 @@ def create_interview(
 
 
 @router.get("/{interview_id}", response_model=InterviewDetail)
-def get_interview(interview_id: str, db: Session = Depends(get_db)) -> InterviewDetail:
+def get_interview(
+    interview_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> InterviewDetail:
     interview = db.get(Interview, interview_id)
     if interview is None:
         raise NotFoundError(f"Interview '{interview_id}' does not exist.")
+    assert_entity_read(db, actor, interview.project_id)
     return interview_detail(db, interview)
 
 
@@ -194,6 +221,7 @@ def update_interview(
     interview = db.get(Interview, interview_id)
     if interview is None:
         raise NotFoundError(f"Interview '{interview_id}' does not exist.")
+    assert_entity_write(db, actor, interview.project_id)
 
     data = payload.model_dump(exclude_unset=True)
     change_note = data.pop("change_note", "")
@@ -282,7 +310,10 @@ def record_consent(
     interview = db.get(Interview, interview_id)
     if interview is None:
         raise NotFoundError(f"Interview '{interview_id}' does not exist.")
+    assert_entity_write(db, actor, interview.project_id)
 
+    now = datetime.now(timezone.utc)
+    withdrawn = payload.status.value == "withdrawn"
     db.add(
         ConsentRecord(
             interview_id=interview.id,
@@ -290,14 +321,62 @@ def record_consent(
             consent_type=payload.consent_type.value,
             status=payload.status.value,
             recorded_by_id=actor.id if actor else None,
-            recorded_at=datetime.now(timezone.utc),
+            recorded_at=now,
             note=payload.note,
         )
     )
     if payload.consent_type.value == "participation":
         interview.consent_status = payload.status.value
+        participant = db.get(Participant, interview.participant_id)
+        if participant is not None:
+            # Consent applies to the person, not only to one booking. Keeping the
+            # latest decision on the participant record stops the next outreach
+            # from ignoring a withdrawal recorded in an earlier project.
+            participant.contact_consent = payload.status.value
     if payload.consent_type.value == "recording" and payload.status.value != "granted":
         interview.recording_enabled = False
+
+    cancelled_codes: list[str] = []
+    if withdrawn:
+        # A withdrawal is prospective. Historical evidence and feedback stay in
+        # the record under the retention policy; no new contact is allowed.
+        future = (
+            db.execute(
+                select(Interview).where(
+                    Interview.participant_id == interview.participant_id,
+                    Interview.status.in_(("planned", "scheduled", "in_progress")),
+                    Interview.id != interview.id,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for other in future:
+            other.status = "cancelled"
+            cancelled_codes.append(other.code)
+            log_activity(
+                db,
+                entity_type="interview",
+                entity_id=other.id,
+                entity_label=other.code,
+                verb="cancelled",
+                summary="Interview cancelled because the participant withdrew consent.",
+                actor_id=actor.id if actor else None,
+                project_id=other.project_id,
+            )
+        if interview.status in ("planned", "scheduled", "in_progress"):
+            interview.status = "cancelled"
+
+        recruitment = db.get(RecruitmentRecord, interview.recruitment_id) if interview.recruitment_id else None
+        if recruitment is not None and recruitment.stage not in ("withdrawn", "cancelled"):
+            advance_stage(
+                db,
+                recruitment,
+                "withdrawn",
+                note="Consent withdrawn. No further research contact is permitted.",
+                actor_id=actor.id if actor else None,
+                force=True,
+            )
 
     log_activity(
         db,
@@ -305,10 +384,28 @@ def record_consent(
         entity_id=interview.id,
         entity_label=interview.code,
         verb="consent",
-        summary=f"Consent recorded: {payload.consent_type.value} = {payload.status.value}.",
+        summary=(
+            f"Consent recorded: {payload.consent_type.value} = {payload.status.value}."
+            + (f" {payload.note}" if payload.note else "")
+            + (f" Cancelled future session(s): {', '.join(cancelled_codes)}." if cancelled_codes else "")
+        ).strip(),
         actor_id=actor.id if actor else None,
         project_id=interview.project_id,
     )
+    if withdrawn:
+        log_activity(
+            db,
+            entity_type="participant",
+            entity_id=interview.participant_id,
+            entity_label="Participant consent",
+            verb="withdrawn",
+            summary=(
+                f"{payload.consent_type.value.replace('_', ' ').title()} consent withdrawn. "
+                "No further outreach is permitted. Previously collected research is retained under policy."
+            ),
+            actor_id=actor.id if actor else None,
+            project_id=interview.project_id,
+        )
     db.commit()
     db.refresh(interview)
     return interview_detail(db, interview)
@@ -324,6 +421,7 @@ def toggle_recording(
     interview = db.get(Interview, interview_id)
     if interview is None:
         raise NotFoundError(f"Interview '{interview_id}' does not exist.")
+    assert_entity_write(db, actor, interview.project_id)
     if payload.enabled:
         granted = db.execute(
             select(func.count(ConsentRecord.id)).where(

@@ -9,8 +9,18 @@ from sqlalchemy.orm import Session
 from app.api.deps import Pagination, get_actor
 from app.core.database import get_db
 from app.core.errors import ConflictError, NotFoundError, RuleViolationError
-from app.models import ResearchProject, ResearchQuestion, User
-from app.schemas.common import Message
+from app.models import ProjectMembership, ResearchProject, ResearchQuestion, User
+from app.schemas.common import Message, Ref
+from app.schemas.membership import MembershipIn, MembershipOut, MembershipUpdate
+from app.services.access import (
+    assert_project_manage,
+    assert_project_read,
+    assert_project_write,
+    membership_for,
+    require_actor,
+    role_for,
+    visible_project_ids,
+)
 from app.schemas.project import (
     ProjectCreate,
     ProjectDetail,
@@ -20,7 +30,9 @@ from app.schemas.project import (
     QuestionIn,
     QuestionOut,
 )
+from app.schemas.journey import ProjectJourney
 from app.services.activity import log_activity
+from app.services.journey import build_journey
 from app.services.serializers import project_detail, project_summary
 from app.services.templates import PROJECT_TEMPLATES
 
@@ -36,6 +48,7 @@ def list_templates() -> list[ProjectTemplate]:
 @router.get("", response_model=ProjectListResponse)
 def list_projects(
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
     pagination: Pagination = Depends(),
     q: str | None = Query(default=None, max_length=120),
     project_status: list[str] | None = Query(default=None, alias="status"),
@@ -44,7 +57,18 @@ def list_projects(
     business_function: str | None = Query(default=None),
     include_archived: bool = Query(default=True),
 ) -> ProjectListResponse:
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
     stmt = select(ResearchProject)
+    if allowed is not None:
+        # Workspace-wide reads were the original vulnerability: a signed-in
+        # viewer could list every project. Scope the query before filters and
+        # pagination so the reported total matches what the caller may see.
+        if not allowed:
+            return ProjectListResponse(
+                items=[], total=0, page=pagination.page, page_size=pagination.page_size, pages=0
+            )
+        stmt = stmt.where(ResearchProject.id.in_(allowed))
     if project_status:
         stmt = stmt.where(ResearchProject.status.in_(project_status))
     elif not include_archived:
@@ -72,7 +96,10 @@ def list_projects(
         rows = [p for p in rows if business_function in (p.business_functions or [])]
     total = len(rows)
     offset = (pagination.page - 1) * pagination.page_size
-    items = [project_summary(db, p) for p in rows[offset : offset + pagination.page_size]]
+    items = [
+        project_summary(db, p, role=role_for(db, user, p.id))
+        for p in rows[offset : offset + pagination.page_size]
+    ]
     return ProjectListResponse(
         items=items,
         total=total,
@@ -88,6 +115,7 @@ def create_project(
     db: Session = Depends(get_db),
     actor: User | None = Depends(get_actor),
 ) -> ProjectDetail:
+    creator = require_actor(actor)
     if payload.owner_id and db.get(User, payload.owner_id) is None:
         raise NotFoundError("The selected project owner does not exist.")
 
@@ -106,6 +134,23 @@ def create_project(
     )
     db.add(project)
     db.flush()
+
+    # Whoever creates a project owns it. The nominated owner also gets an
+    # explicit grant, so ownership survives the creator losing interest.
+    db.add(
+        ProjectMembership(
+            project_id=project.id, user_id=creator.id, role="project_owner", granted_by_id=creator.id
+        )
+    )
+    if payload.owner_id and payload.owner_id != creator.id:
+        db.add(
+            ProjectMembership(
+                project_id=project.id,
+                user_id=payload.owner_id,
+                role="project_owner",
+                granted_by_id=creator.id,
+            )
+        )
 
     for order, question in enumerate(payload.questions):
         db.add(
@@ -133,11 +178,34 @@ def create_project(
 
 
 @router.get("/{project_id}", response_model=ProjectDetail)
-def get_project(project_id: str, db: Session = Depends(get_db)) -> ProjectDetail:
+def get_project(
+    project_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> ProjectDetail:
     project = db.get(ResearchProject, project_id)
     if project is None:
         raise NotFoundError(f"Research project '{project_id}' does not exist.")
-    return project_detail(db, project)
+    assert_project_read(db, actor, project_id)
+    return project_detail(db, project, role=role_for(db, require_actor(actor), project_id))
+
+
+@router.get("/{project_id}/journey", response_model=ProjectJourney)
+def get_project_journey(
+    project_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> ProjectJourney:
+    """A derived board and timeline from the project's real records.
+
+    This is deliberately read-only: the next action is always taken on the
+    entity's own page, so the same permissions and transition rules apply.
+    """
+    project = db.get(ResearchProject, project_id)
+    if project is None:
+        raise NotFoundError(f"Research project '{project_id}' does not exist.")
+    assert_project_read(db, actor, project_id)
+    return build_journey(db, project)
 
 
 @router.patch("/{project_id}", response_model=ProjectDetail)
@@ -150,10 +218,26 @@ def update_project(
     project = db.get(ResearchProject, project_id)
     if project is None:
         raise NotFoundError(f"Research project '{project_id}' does not exist.")
+    assert_project_write(db, actor, project_id)
+    editor = require_actor(actor)
 
     data = payload.model_dump(exclude_unset=True)
     if "owner_id" in data and data["owner_id"] and db.get(User, data["owner_id"]) is None:
         raise NotFoundError("The selected project owner does not exist.")
+
+    if data.get("owner_id") and data["owner_id"] != project.owner_id:
+        existing = membership_for(db, data["owner_id"], project.id)
+        if existing is None:
+            db.add(
+                ProjectMembership(
+                    project_id=project.id,
+                    user_id=data["owner_id"],
+                    role="project_owner",
+                    granted_by_id=editor.id,
+                )
+            )
+        else:
+            existing.role = "project_owner"
 
     start = data.get("start_date", project.start_date)
     deadline = data.get("deadline", project.deadline)
@@ -199,6 +283,7 @@ def archive_project(
     project = db.get(ResearchProject, project_id)
     if project is None:
         raise NotFoundError(f"Research project '{project_id}' does not exist.")
+    assert_project_manage(db, actor, project_id)
     if project.status == "archived":
         raise ConflictError("This project is already archived.")
     project.status = "archived"
@@ -222,10 +307,12 @@ def add_question(
     project_id: str,
     payload: QuestionIn,
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
 ) -> QuestionOut:
     project = db.get(ResearchProject, project_id)
     if project is None:
         raise NotFoundError(f"Research project '{project_id}' does not exist.")
+    assert_project_write(db, actor, project_id)
     question = ResearchQuestion(
         project_id=project.id,
         text=payload.text.strip(),
@@ -245,7 +332,9 @@ def update_question(
     question_id: str,
     payload: QuestionIn,
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
 ) -> QuestionOut:
+    assert_project_write(db, actor, project_id)
     question = db.get(ResearchQuestion, question_id)
     if question is None or question.project_id != project_id:
         raise NotFoundError("That research question does not exist on this project.")
@@ -258,10 +347,153 @@ def update_question(
 
 
 @router.delete("/{project_id}/questions/{question_id}", response_model=Message)
-def delete_question(project_id: str, question_id: str, db: Session = Depends(get_db)) -> Message:
+def delete_question(
+    project_id: str,
+    question_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> Message:
+    assert_project_write(db, actor, project_id)
     question = db.get(ResearchQuestion, question_id)
     if question is None or question.project_id != project_id:
         raise NotFoundError("That research question does not exist on this project.")
     db.delete(question)
     db.commit()
     return Message(message="Research question removed.")
+
+
+# ------------------------------------------------------------ project members
+def _membership_out(db: Session, membership: ProjectMembership) -> MembershipOut:
+    user = db.get(User, membership.user_id)
+    return MembershipOut(
+        id=membership.id,
+        project_id=membership.project_id,
+        user=Ref(
+            id=membership.user_id,
+            label=user.name if user else "Unknown member",
+            sublabel=user.job_title if user else None,
+        ),
+        role=membership.role,
+        created_at=membership.created_at,
+        email=user.email if user else "",
+    )
+
+
+@router.get("/{project_id}/members", response_model=list[MembershipOut])
+def list_project_members(
+    project_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> list[MembershipOut]:
+    """Who can see this project. Readable by anyone with access, because a
+    researcher needs to know who else is working on the study."""
+    assert_project_read(db, actor, project_id)
+    rows = (
+        db.execute(
+            select(ProjectMembership)
+            .where(ProjectMembership.project_id == project_id)
+            .order_by(ProjectMembership.role.desc(), ProjectMembership.created_at.asc())
+        )
+        .scalars()
+        .all()
+    )
+    return [_membership_out(db, row) for row in rows]
+
+
+@router.post("/{project_id}/members", response_model=MembershipOut, status_code=status.HTTP_201_CREATED)
+def add_project_member(
+    project_id: str,
+    payload: MembershipIn,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> MembershipOut:
+    assert_project_manage(db, actor, project_id)
+    manager = require_actor(actor)
+    target = db.get(User, payload.user_id)
+    if target is None or not target.is_active:
+        raise NotFoundError("That team member does not exist or is inactive.")
+
+    existing = membership_for(db, target.id, project_id)
+    if existing is not None:
+        existing.role = payload.role.value
+        db.commit()
+        db.refresh(existing)
+        return _membership_out(db, existing)
+
+    membership = ProjectMembership(
+        project_id=project_id,
+        user_id=target.id,
+        role=payload.role.value,
+        granted_by_id=manager.id,
+    )
+    db.add(membership)
+    log_activity(
+        db,
+        entity_type="project",
+        entity_id=project_id,
+        entity_label=f"Project {project_id}",
+        verb="member_added",
+        summary=f"{target.name} was granted {payload.role.value.replace('_', ' ')} access.",
+        actor_id=manager.id,
+        project_id=project_id,
+    )
+    db.commit()
+    db.refresh(membership)
+    return _membership_out(db, membership)
+
+
+def _owner_count(db: Session, project_id: str) -> int:
+    return len(
+        [
+            row
+            for row in db.execute(
+                select(ProjectMembership).where(
+                    ProjectMembership.project_id == project_id,
+                    ProjectMembership.role == "project_owner",
+                )
+            ).scalars()
+        ]
+    )
+
+
+@router.patch("/{project_id}/members/{membership_id}", response_model=MembershipOut)
+def update_project_member(
+    project_id: str,
+    membership_id: str,
+    payload: MembershipUpdate,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> MembershipOut:
+    assert_project_manage(db, actor, project_id)
+    membership = db.get(ProjectMembership, membership_id)
+    if membership is None or membership.project_id != project_id:
+        raise NotFoundError("That membership does not exist on this project.")
+    if membership.role == "project_owner" and payload.role.value != "project_owner":
+        if _owner_count(db, project_id) <= 1:
+            raise ConflictError(
+                "A project must keep at least one owner. Grant another owner before changing this one."
+            )
+    membership.role = payload.role.value
+    db.commit()
+    db.refresh(membership)
+    return _membership_out(db, membership)
+
+
+@router.delete("/{project_id}/members/{membership_id}", response_model=Message)
+def remove_project_member(
+    project_id: str,
+    membership_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> Message:
+    assert_project_manage(db, actor, project_id)
+    membership = db.get(ProjectMembership, membership_id)
+    if membership is None or membership.project_id != project_id:
+        raise NotFoundError("That membership does not exist on this project.")
+    if membership.role == "project_owner" and _owner_count(db, project_id) <= 1:
+        raise ConflictError(
+            "A project must keep at least one owner. Grant another owner before removing this one."
+        )
+    db.delete(membership)
+    db.commit()
+    return Message(message="Project access removed.")

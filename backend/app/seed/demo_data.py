@@ -26,7 +26,9 @@ from app.models import (
     Interview,
     InterviewGuideQuestion,
     OrganizationSetting,
+    Outcome,
     Participant,
+    ProjectMembership,
     RecruitmentEvent,
     RecruitmentRecord,
     ResearchProject,
@@ -68,9 +70,11 @@ def seed_demo_data(db: Session, reset: bool = False) -> dict[str, int]:
     interviews = _seed_interviews(db, users, projects, participants, recruitment)
     evidence = _seed_evidence(db, users, projects, participants, interviews)
     _seed_feedback(db, users, projects, participants, interviews)
+    _seed_memberships(db, users, projects)
     insights = _seed_insights(db, users, projects, evidence)
     decisions = _seed_decisions(db, users, projects, insights, evidence)
     _seed_actions(db, users, decisions, insights)
+    _seed_outcomes(db, users, decisions)
     _seed_activity(db, users, projects, insights, decisions, interviews, evidence)
     db.add(
         OrganizationSetting(
@@ -86,10 +90,42 @@ def seed_demo_data(db: Session, reset: bool = False) -> dict[str, int]:
     return _counts(db)
 
 
+def _seed_memberships(db: Session, users: dict[str, User], projects: dict[str, ResearchProject]) -> None:
+    """Explicit project grants for the synthetic team.
+
+    Deliberately uneven: the demo needs at least one legitimate account that
+    cannot see a given project, otherwise project isolation cannot be shown or
+    tested. Priya coordinates every study, so she is an editor everywhere; Rohan
+    (growth) owns one study and co-owns another but is not on the shampoo study.
+    """
+    grants = {
+        "arjun": {key: "project_owner" for key in projects},  # workspace admin
+        "priya": {**{key: "editor" for key in projects}, "shampoo_repeat": "project_owner"},
+        "dev": {"routine_campaign": "project_owner", "packaging": "project_owner", "bodywash": "editor"},
+        "nisha": {"bodywash": "project_owner", "routine_campaign": "editor"},
+        "rohan": {"first_to_second": "project_owner", "routine_campaign": "editor", "packaging": "viewer"},
+        "vikram": {"shampoo_repeat": "editor", "first_to_second": "viewer"},
+        "asha": {key: "viewer" for key in projects},  # executive read-only oversight
+    }
+    for user_key, project_roles in grants.items():
+        for project_key, role in project_roles.items():
+            db.add(
+                ProjectMembership(
+                    project_id=projects[project_key].id,
+                    user_id=users[user_key].id,
+                    role=role,
+                    granted_by_id=users["arjun"].id,
+                )
+            )
+    db.flush()
+
+
 def _wipe(db: Session) -> None:
     for model in (
+        ProjectMembership,
         ActivityLog,
         BusinessAction,
+        Outcome,
         DecisionEvidence,
         DecisionInsight,
         Decision,
@@ -124,6 +160,7 @@ def _counts(db: Session) -> dict[str, int]:
         "insights": Insight,
         "decisions": Decision,
         "actions": BusinessAction,
+        "outcomes": Outcome,
         "activity": ActivityLog,
     }
     return {name: db.execute(select(func.count(model.id))).scalar_one() for name, model in models.items()}
@@ -990,6 +1027,71 @@ def _seed_actions(
             created_at=_dt(10),
         )
         db.add(action)
+    db.flush()
+
+
+def _seed_outcomes(
+    db: Session,
+    users: dict[str, User],
+    decisions: dict[str, Decision],
+) -> None:
+    """Plan outcomes without inventing results.
+
+    The demo deliberately leaves both outcomes unmeasured: one window is open and
+    one has not started. That is the honest state of a team that has planned what
+    to measure but has not received the data yet.
+    """
+    rows = [
+        (
+            "Second purchase within 60 days of the trial",
+            "pack_size",
+            "Share of trial buyers who place a second order within 60 days of the first delivery.",
+            18.0,
+            28.0,
+            "%",
+            "increase",
+            30,
+            -30,
+            "measurement_pending",
+            "rohan",
+            "Order data from the commerce platform (not connected in this prototype).",
+            "Baseline is the current 60-day repeat rate for first-time shampoo buyers.",
+        ),
+        (
+            "Practical-language campaign recognition",
+            "campaign_rewrite",
+            "Share of target buyers who describe the campaign as relevant to their own routine in the post-flight survey.",
+            None,
+            60.0,
+            "%",
+            "increase",
+            -7,
+            -45,
+            "planned",
+            "dev",
+            "Brand tracker survey (to be commissioned).",
+            "No baseline exists yet, so the target cannot be judged until the first survey wave lands.",
+        ),
+    ]
+    for index, (name, decision_key, metric, baseline, target, unit, direction, start, end, status, owner, source, notes) in enumerate(rows, start=1):
+        db.add(
+            Outcome(
+                code=f"OUT-{index:03d}",
+                name=name,
+                decision_id=decisions[decision_key].id,
+                metric_definition=metric,
+                baseline_value=baseline,
+                target_value=target,
+                unit=unit,
+                direction=direction,
+                measurement_start=_d(start),
+                measurement_end=_d(end),
+                status=status,
+                owner_id=users[owner].id,
+                data_source=source,
+                notes=notes,
+            )
+        )
     db.flush()
 
 

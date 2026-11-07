@@ -97,6 +97,10 @@ class ProjectSummary(ProjectOut):
     counts: ProjectCounts = Field(default_factory=ProjectCounts)
     unresolved_questions: int = 0
     segment_gap: bool = False
+    # The caller's effective role in this project (viewer/editor/project_owner).
+    # Sent so the UI can render permission-aware actions; the API remains the
+    # authority and re-checks every request.
+    role: Optional[str] = None
 
 
 class ProjectDetail(ProjectSummary):

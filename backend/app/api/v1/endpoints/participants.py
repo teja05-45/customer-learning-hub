@@ -9,16 +9,35 @@ from sqlalchemy.orm import Session
 from app.api.deps import Pagination, get_actor
 from app.core.database import get_db
 from app.core.errors import ConflictError, NotFoundError
-from app.models import Evidence, Interview, Participant, RecruitmentRecord, ResearchProject, User
+from app.models import (
+    Evidence,
+    FeedbackRecord,
+    Insight,
+    InsightEvidence,
+    Interview,
+    Participant,
+    RecruitmentRecord,
+    ResearchProject,
+    User,
+)
+from app.models.enums import feedback_depth
 from app.schemas.common import Message
 from app.schemas.participant import (
     ParticipantCreate,
     ParticipantDetail,
     ParticipantListResponse,
+    ParticipantFeedbackItem,
     ParticipantOut,
     ParticipantUpdate,
     ParticipationHistoryItem,
     RecruitmentOut,
+)
+from app.services.access import (
+    assert_participant_read,
+    assert_participant_write,
+    assert_project_write,
+    require_actor,
+    visible_project_ids,
 )
 from app.services.activity import log_activity
 from app.services.common import next_code
@@ -35,6 +54,7 @@ class AssignRequest(BaseModel):
 @router.get("", response_model=ParticipantListResponse)
 def list_participants(
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
     pagination: Pagination = Depends(),
     q: str | None = Query(default=None, max_length=120),
     segment: list[str] | None = Query(default=None),
@@ -42,7 +62,23 @@ def list_participants(
     product_category: str | None = Query(default=None),
     sort: str = Query(default="name", pattern="^(name|recent|orders|segment)$"),
 ) -> ParticipantListResponse:
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
     stmt = select(Participant)
+    if allowed is not None:
+        # Customers are workspace-level records; scope them to the people who
+        # actually appear in a study the caller may read.
+        from app.services.access import participant_project_ids
+
+        visible_ids = set()
+        for participant_id in db.execute(select(Participant.id)).scalars():
+            if participant_project_ids(db, participant_id) & allowed:
+                visible_ids.add(participant_id)
+        if not visible_ids:
+            return ParticipantListResponse(
+                items=[], total=0, page=pagination.page, page_size=pagination.page_size, pages=0, segment_counts={}
+            )
+        stmt = stmt.where(Participant.id.in_(visible_ids))
     if q:
         term = f"%{q.lower()}%"
         stmt = stmt.where(
@@ -74,9 +110,9 @@ def list_participants(
         .unique()
         .all()
     )
-    segment_counts = dict(
-        db.execute(select(Participant.segment, func.count(Participant.id)).group_by(Participant.segment)).all()
-    )
+    segment_counts: dict[str, int] = {}
+    for participant in db.execute(select(Participant).where(Participant.id.in_([p.id for p in rows]))).scalars():
+        segment_counts[participant.segment] = segment_counts.get(participant.segment, 0) + 1
     return ParticipantListResponse(
         items=[participant_out(db, p) for p in rows],
         total=total,
@@ -124,10 +160,17 @@ def create_participant(
 
 
 @router.get("/{participant_id}", response_model=ParticipantDetail)
-def get_participant(participant_id: str, db: Session = Depends(get_db)) -> ParticipantDetail:
+def get_participant(
+    participant_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> ParticipantDetail:
     participant = db.get(Participant, participant_id)
     if participant is None:
         raise NotFoundError(f"Participant '{participant_id}' does not exist.")
+    assert_participant_read(db, actor, participant_id)
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
 
     records = (
         db.execute(
@@ -147,10 +190,24 @@ def get_participant(participant_id: str, db: Session = Depends(get_db)) -> Parti
         )
         .all()
     )
+    if allowed is not None:
+        # The profile aggregates every study this person appears in. Show only
+        # the ones this caller may read; otherwise one shared customer would
+        # become a window into other teams' projects.
+        records = [r for r in records if r.project_id in allowed]
+        interview_rows = [(i, p) for i, p in interview_rows if p.id in allowed]
+
     history: list[ParticipationHistoryItem] = []
     for interview, project in interview_rows:
         evidence_count = db.execute(
             select(func.count(Evidence.id)).where(Evidence.interview_id == interview.id)
+        ).scalar_one()
+        # Insights are linked through evidence, so resolve the distinct insights
+        # that cite anything captured in this conversation.
+        insight_count = db.execute(
+            select(func.count(func.distinct(InsightEvidence.insight_id)))
+            .join(Evidence, Evidence.id == InsightEvidence.evidence_id)
+            .where(Evidence.interview_id == interview.id)
         ).scalar_one()
         history.append(
             ParticipationHistoryItem(
@@ -161,18 +218,52 @@ def get_participant(participant_id: str, db: Session = Depends(get_db)) -> Parti
                 status=interview.status,
                 scheduled_at=interview.scheduled_at,
                 evidence_count=evidence_count,
-                insight_count=0,
+                insight_count=insight_count,
             )
         )
 
-    evidence_count = db.execute(
-        select(func.count(Evidence.id)).where(Evidence.participant_id == participant.id)
-    ).scalar_one()
+    feedback_rows = (
+        db.execute(
+            select(FeedbackRecord, ResearchProject, Interview)
+            .join(ResearchProject, ResearchProject.id == FeedbackRecord.project_id)
+            .outerjoin(Interview, Interview.id == FeedbackRecord.interview_id)
+            .where(FeedbackRecord.participant_id == participant.id)
+            .order_by(FeedbackRecord.collected_at.desc())
+            .limit(100)
+        )
+        .all()
+    )
+    if allowed is not None:
+        feedback_rows = [row for row in feedback_rows if row[1].id in allowed]
+    feedback_history = [
+        ParticipantFeedbackItem(
+            id=record.id,
+            code=record.code,
+            project_id=project.id,
+            project_name=project.name,
+            source_type=record.source_type,
+            collection_method=record.collection_method,
+            collected_at=record.collected_at,
+            content=record.content,
+            interpretation=record.interpretation,
+            verification_status=record.verification_status,
+            research_depth=feedback_depth(record.collection_method)[0],
+            interview_id=interview.id if interview else None,
+            interview_code=interview.code if interview else None,
+        )
+        for record, project, interview in feedback_rows
+    ]
+
+    evidence_stmt = select(func.count(Evidence.id)).where(Evidence.participant_id == participant.id)
+    if allowed is not None:
+        evidence_stmt = evidence_stmt.where(Evidence.project_id.in_(allowed))
+    evidence_count = db.execute(evidence_stmt).scalar_one()
     base = participant_out(db, participant)
     return ParticipantDetail(
         **base.model_dump(),
         recruitment=[recruitment_out(db, r) for r in records],
         participation_history=history,
+        feedback_history=feedback_history,
         evidence_count=evidence_count,
     )
 
@@ -182,10 +273,12 @@ def update_participant(
     participant_id: str,
     payload: ParticipantUpdate,
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
 ) -> ParticipantOut:
     participant = db.get(Participant, participant_id)
     if participant is None:
         raise NotFoundError(f"Participant '{participant_id}' does not exist.")
+    assert_participant_write(db, actor, participant_id)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(participant, field, value.value if hasattr(value, "value") else value)
     db.commit()
@@ -206,6 +299,7 @@ def assign_to_project(
     project = db.get(ResearchProject, payload.project_id)
     if project is None:
         raise NotFoundError("That research project does not exist.")
+    assert_project_write(db, actor, project.id)
     if participant.eligibility == "ineligible":
         raise ConflictError(
             "This participant is marked ineligible for research contact. Update eligibility first, with a reason."

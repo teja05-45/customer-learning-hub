@@ -16,6 +16,19 @@ class UserRole(str, Enum):
     ADMIN = "admin"
 
 
+class ProjectRole(str, Enum):
+    """A user's standing inside one project.
+
+    Deliberately separate from ``UserRole``: the workspace role says what kind of
+    work a person does (research, growth, administration), the project role says
+    which projects they may do it in. A permission is the intersection of both.
+    """
+
+    VIEWER = "viewer"
+    EDITOR = "editor"
+    PROJECT_OWNER = "project_owner"
+
+
 class ProjectStatus(str, Enum):
     DRAFT = "draft"
     PLANNING = "planning"
@@ -142,6 +155,28 @@ class ActionStatus(str, Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     BLOCKED = "blocked"
+
+
+class OutcomeStatus(str, Enum):
+    """Where a planned business outcome has reached in its measurement cycle.
+
+    ``planned`` and ``measurement_pending`` are deliberately distinct: a metric
+    with a baseline but no due date has not started measuring, while one inside
+    its window is waiting for the result. Neither is reported as achieved.
+    """
+
+    PLANNED = "planned"
+    MEASUREMENT_PENDING = "measurement_pending"
+    ACHIEVED = "achieved"
+    NOT_ACHIEVED = "not_achieved"
+    INCONCLUSIVE = "inconclusive"
+
+
+class OutcomeDirection(str, Enum):
+    """Which way the metric has to move to count as a success."""
+
+    INCREASE = "increase"
+    DECREASE = "decrease"
 
 
 class BusinessFunction(str, Enum):

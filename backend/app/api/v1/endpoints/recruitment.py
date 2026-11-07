@@ -24,6 +24,14 @@ from app.schemas.participant import (
     RecruitmentOut,
     RecruitmentUpdate,
 )
+from app.services.access import (
+    assert_project_read,
+    assert_project_write,
+    assert_entity_read,
+    assert_entity_write,
+    require_actor,
+    visible_project_ids,
+)
 from app.services.activity import log_activity
 from app.services.pipeline import advance_stage
 from app.services.serializers import recruitment_out, segment_coverage
@@ -77,14 +85,24 @@ def _warnings(db: Session, project_id: str | None, records: list[RecruitmentReco
 @router.get("", response_model=RecruitmentListResponse)
 def list_recruitment(
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
     project_id: str | None = Query(default=None),
     stage: list[str] | None = Query(default=None),
     segment: list[str] | None = Query(default=None),
     q: str | None = Query(default=None, max_length=120),
     owner_id: str | None = Query(default=None),
 ) -> RecruitmentListResponse:
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
     stmt = select(RecruitmentRecord)
+    if allowed is not None:
+        if not allowed:
+            return RecruitmentListResponse(
+                items=[], total=0, stage_counts={}, segment_coverage={}, warnings=[]
+            )
+        stmt = stmt.where(RecruitmentRecord.project_id.in_(allowed))
     if project_id:
+        assert_project_read(db, user, project_id)
         stmt = stmt.where(RecruitmentRecord.project_id == project_id)
     if stage:
         stmt = stmt.where(RecruitmentRecord.stage.in_(stage))
@@ -101,13 +119,9 @@ def list_recruitment(
     stmt = stmt.order_by(RecruitmentRecord.updated_at.desc())
     records = db.execute(stmt).scalars().unique().all()
 
-    stage_counts = dict(
-        db.execute(
-            select(RecruitmentRecord.stage, func.count(RecruitmentRecord.id))
-            .where(RecruitmentRecord.project_id == project_id if project_id else True)
-            .group_by(RecruitmentRecord.stage)
-        ).all()
-    )
+    stage_counts: dict[str, int] = {}
+    for record in records:
+        stage_counts[record.stage] = stage_counts.get(record.stage, 0) + 1
     coverage = segment_coverage(db, project_id) if project_id else {}
 
     return RecruitmentListResponse(
@@ -128,6 +142,7 @@ def create_recruitment(
     project = db.get(ResearchProject, payload.project_id)
     if project is None:
         raise NotFoundError("That research project does not exist.")
+    assert_project_write(db, actor, project.id)
 
     created: list[RecruitmentOut] = []
     skipped: list[dict] = []
@@ -197,10 +212,15 @@ def create_recruitment(
 
 
 @router.get("/{recruitment_id}", response_model=RecruitmentOut)
-def get_recruitment(recruitment_id: str, db: Session = Depends(get_db)) -> RecruitmentOut:
+def get_recruitment(
+    recruitment_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> RecruitmentOut:
     record = db.get(RecruitmentRecord, recruitment_id)
     if record is None:
         raise NotFoundError("That recruitment record does not exist.")
+    assert_entity_read(db, actor, record.project_id)
     return recruitment_out(db, record, include_events=True)
 
 
@@ -214,6 +234,7 @@ def update_recruitment(
     record = db.get(RecruitmentRecord, recruitment_id)
     if record is None:
         raise NotFoundError("That recruitment record does not exist.")
+    assert_entity_write(db, actor, record.project_id)
 
     previous = record.stage
     if payload.stage and payload.stage.value != previous:
@@ -248,10 +269,15 @@ def update_recruitment(
 
 
 @router.delete("/{recruitment_id}", response_model=Message)
-def delete_recruitment(recruitment_id: str, db: Session = Depends(get_db)) -> Message:
+def delete_recruitment(
+    recruitment_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> Message:
     record = db.get(RecruitmentRecord, recruitment_id)
     if record is None:
         raise NotFoundError("That recruitment record does not exist.")
+    assert_entity_write(db, actor, record.project_id)
     db.delete(record)
     db.commit()
     return Message(message="Participant removed from the recruitment list.")

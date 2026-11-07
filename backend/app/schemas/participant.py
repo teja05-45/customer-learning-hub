@@ -70,9 +70,26 @@ class ParticipationHistoryItem(BaseModel):
     insight_count: int
 
 
+class ParticipantFeedbackItem(BaseModel):
+    id: str
+    code: str
+    project_id: str
+    project_name: str
+    source_type: str
+    collection_method: str
+    collected_at: datetime
+    content: str
+    interpretation: str
+    verification_status: str
+    research_depth: str
+    interview_id: Optional[str] = None
+    interview_code: Optional[str] = None
+
+
 class ParticipantDetail(ParticipantOut):
     recruitment: list["RecruitmentOut"] = Field(default_factory=list)
     participation_history: list[ParticipationHistoryItem] = Field(default_factory=list)
+    feedback_history: list[ParticipantFeedbackItem] = Field(default_factory=list)
     evidence_count: int = 0
 
 

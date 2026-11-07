@@ -65,19 +65,35 @@ def _count(db: Session, stmt) -> int:
     return db.execute(stmt).scalar_one()
 
 
-def build_dashboard(db: Session, months: int = 6) -> DashboardResponse:
+def _visible(column, project_ids: set[str] | None) -> list:
+    """Extra WHERE clauses for project scope. None means 'workspace-wide'."""
+    return [] if project_ids is None else [column.in_(project_ids)]
+
+
+def build_dashboard(
+    db: Session, months: int = 6, project_ids: set[str] | None = None
+) -> DashboardResponse:
     now = datetime.now(timezone.utc)
 
     active_projects = _count(
-        db, select(func.count(ResearchProject.id)).where(ResearchProject.status.in_(ACTIVE_STATUSES))
+        db,
+        select(func.count(ResearchProject.id)).where(
+            ResearchProject.status.in_(ACTIVE_STATUSES), *_visible(ResearchProject.id, project_ids)
+        ),
     )
     interviews_completed = _count(
-        db, select(func.count(Interview.id)).where(Interview.status == "completed")
+        db,
+        select(func.count(Interview.id)).where(
+            Interview.status == "completed", *_visible(Interview.project_id, project_ids)
+        ),
     )
     upcoming_rows = (
         db.execute(
             select(Interview)
-            .where(Interview.status.in_(("planned", "scheduled")))
+            .where(
+                Interview.status.in_(("planned", "scheduled")),
+                *_visible(Interview.project_id, project_ids),
+            )
             .order_by(Interview.scheduled_at.asc())
         )
         .scalars()
@@ -86,10 +102,18 @@ def build_dashboard(db: Session, months: int = 6) -> DashboardResponse:
     upcoming = [i for i in upcoming_rows if as_aware(i.scheduled_at) and as_aware(i.scheduled_at) >= now]
 
     invited = _count(
-        db, select(func.count(RecruitmentRecord.id)).where(RecruitmentRecord.invited_at.is_not(None))
+        db,
+        select(func.count(RecruitmentRecord.id)).where(
+            RecruitmentRecord.invited_at.is_not(None),
+            *_visible(RecruitmentRecord.project_id, project_ids),
+        ),
     )
     responded = _count(
-        db, select(func.count(RecruitmentRecord.id)).where(RecruitmentRecord.responded_at.is_not(None))
+        db,
+        select(func.count(RecruitmentRecord.id)).where(
+            RecruitmentRecord.responded_at.is_not(None),
+            *_visible(RecruitmentRecord.project_id, project_ids),
+        ),
     )
     response_rate = ResponseRate(
         value=round(responded / invited, 4) if invited else None,
@@ -108,22 +132,35 @@ def build_dashboard(db: Session, months: int = 6) -> DashboardResponse:
     participants_contacted = _count(
         db,
         select(func.count(func.distinct(RecruitmentRecord.participant_id))).where(
-            RecruitmentRecord.stage.in_(CONTACTED_STAGES)
+            RecruitmentRecord.stage.in_(CONTACTED_STAGES),
+            *_visible(RecruitmentRecord.project_id, project_ids),
         ),
     )
 
     insights_awaiting_review = _count(
-        db, select(func.count(Insight.id)).where(Insight.status.in_(("draft", "under_review")))
+        db,
+        select(func.count(Insight.id)).where(
+            Insight.status.in_(("draft", "under_review")), *_visible(Insight.project_id, project_ids)
+        ),
     )
 
-    decision_rows = db.execute(select(Decision)).scalars().all()
+    decision_rows = (
+        db.execute(select(Decision).where(*_visible(Decision.project_id, project_ids))).scalars().all()
+    )
     decisions_with_evidence = len([d for d in decision_rows if d.evidence_links or d.insight_links])
 
-    action_rows = db.execute(select(BusinessAction)).scalars().all()
+    action_stmt = select(BusinessAction)
+    if project_ids is not None:
+        action_stmt = action_stmt.where(
+            BusinessAction.decision_id.in_(select(Decision.id).where(Decision.project_id.in_(project_ids)))
+        )
+    action_rows = db.execute(action_stmt).scalars().all()
     open_actions = [a for a in action_rows if a.status != "completed"]
     overdue = [a for a in open_actions if a.due_date and a.due_date < date.today()]
 
-    insight_rows = db.execute(select(Insight)).scalars().all()
+    insight_rows = (
+        db.execute(select(Insight).where(*_visible(Insight.project_id, project_ids))).scalars().all()
+    )
     with_evidence = 0
     reused = 0
     for insight in insight_rows:
@@ -137,7 +174,11 @@ def build_dashboard(db: Session, months: int = 6) -> DashboardResponse:
 
     total_insights = len(insight_rows)
     unresolved = _count(
-        db, select(func.count(ResearchQuestion.id)).where(ResearchQuestion.is_resolved.is_(False))
+        db,
+        select(func.count(ResearchQuestion.id)).where(
+            ResearchQuestion.is_resolved.is_(False),
+            *_visible(ResearchQuestion.project_id, project_ids),
+        ),
     )
     unevidenced_decisions = len([d for d in decision_rows if not d.evidence_links and not d.insight_links])
 
@@ -161,11 +202,15 @@ def build_dashboard(db: Session, months: int = 6) -> DashboardResponse:
     # --- timeline -----------------------------------------------------------
     window = month_sequence(months, now)
     buckets = {key: {"interviews": 0, "evidence": 0, "insights": 0} for key, _ in window}
-    for interview in db.execute(select(Interview).where(Interview.status == "completed")).scalars():
+    for interview in db.execute(
+        select(Interview).where(
+            Interview.status == "completed", *_visible(Interview.project_id, project_ids)
+        )
+    ).scalars():
         when = as_aware(interview.completed_at or interview.scheduled_at)
         if when and month_key(when) in buckets:
             buckets[month_key(when)]["interviews"] += 1
-    for ev in db.execute(select(Evidence)).scalars():
+    for ev in db.execute(select(Evidence).where(*_visible(Evidence.project_id, project_ids))).scalars():
         when = as_aware(ev.captured_at)
         if when and month_key(when) in buckets:
             buckets[month_key(when)]["evidence"] += 1
@@ -179,16 +224,33 @@ def build_dashboard(db: Session, months: int = 6) -> DashboardResponse:
 
     # --- segments -----------------------------------------------------------
     segment_points: list[SegmentPoint] = []
-    participant_counts = dict(
-        db.execute(select(Participant.segment, func.count(Participant.id)).group_by(Participant.segment)).all()
-    )
+    if project_ids is None:
+        participant_counts = dict(
+            db.execute(select(Participant.segment, func.count(Participant.id)).group_by(Participant.segment)).all()
+        )
+    else:
+        participant_counts = dict(
+            db.execute(
+                select(Participant.segment, func.count(func.distinct(Participant.id)))
+                .join(RecruitmentRecord, RecruitmentRecord.participant_id == Participant.id)
+                .where(RecruitmentRecord.project_id.in_(project_ids))
+                .group_by(Participant.segment)
+            ).all()
+        )
     interview_counts = dict(
-        db.execute(select(Participant.segment, func.count(Interview.id)).join(
-            Participant, Participant.id == Interview.participant_id
-        ).group_by(Participant.segment)).all()
+        db.execute(
+            select(Participant.segment, func.count(Interview.id))
+            .join(Participant, Participant.id == Interview.participant_id)
+            .where(*_visible(Interview.project_id, project_ids))
+            .group_by(Participant.segment)
+        ).all()
     )
     evidence_counts = dict(
-        db.execute(select(Evidence.segment, func.count(Evidence.id)).group_by(Evidence.segment)).all()
+        db.execute(
+            select(Evidence.segment, func.count(Evidence.id))
+            .where(*_visible(Evidence.project_id, project_ids))
+            .group_by(Evidence.segment)
+        ).all()
     )
     for segment in sorted(set(participant_counts) | set(evidence_counts) | set(interview_counts)):
         segment_points.append(
@@ -203,21 +265,40 @@ def build_dashboard(db: Session, months: int = 6) -> DashboardResponse:
     decision_status = [
         StatusCount(status=status, count=count)
         for status, count in db.execute(
-            select(Decision.status, func.count(Decision.id)).group_by(Decision.status)
+            select(Decision.status, func.count(Decision.id))
+            .where(*_visible(Decision.project_id, project_ids))
+            .group_by(Decision.status)
         ).all()
     ]
+    action_status_stmt = select(BusinessAction.status, func.count(BusinessAction.id))
+    if project_ids is not None:
+        action_status_stmt = action_status_stmt.where(
+            BusinessAction.decision_id.in_(select(Decision.id).where(Decision.project_id.in_(project_ids)))
+        )
     action_status = [
         StatusCount(status=status, count=count)
-        for status, count in db.execute(
-            select(BusinessAction.status, func.count(BusinessAction.id)).group_by(BusinessAction.status)
-        ).all()
+        for status, count in db.execute(action_status_stmt.group_by(BusinessAction.status)).all()
     ]
 
     recent_insights = (
-        db.execute(select(Insight).order_by(Insight.created_at.desc()).limit(5)).scalars().all()
+        db.execute(
+            select(Insight)
+            .where(*_visible(Insight.project_id, project_ids))
+            .order_by(Insight.created_at.desc())
+            .limit(5)
+        )
+        .scalars()
+        .all()
     )
     recent_activity_rows = (
-        db.execute(select(ActivityLog).order_by(ActivityLog.created_at.desc()).limit(10)).scalars().all()
+        db.execute(
+            select(ActivityLog)
+            .where(*_visible(ActivityLog.project_id, project_ids))
+            .order_by(ActivityLog.created_at.desc())
+            .limit(10)
+        )
+        .scalars()
+        .all()
     )
     actor_refs = user_map(db, {a.actor_id for a in recent_activity_rows})
     outstanding = sorted(
@@ -226,7 +307,7 @@ def build_dashboard(db: Session, months: int = 6) -> DashboardResponse:
     project_rows = (
         db.execute(
             select(ResearchProject)
-            .where(ResearchProject.status.in_(ACTIVE_STATUSES))
+            .where(ResearchProject.status.in_(ACTIVE_STATUSES), *_visible(ResearchProject.id, project_ids))
             .order_by(ResearchProject.deadline.asc().nulls_last())
             .limit(4)
         )

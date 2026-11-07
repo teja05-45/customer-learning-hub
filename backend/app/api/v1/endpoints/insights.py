@@ -32,6 +32,15 @@ from app.schemas.traceability import (
     InsightTraceability,
     RelationshipWriteResponse,
 )
+from app.services.access import (
+    assert_entity_read,
+    assert_entity_write,
+    assert_project_read,
+    assert_project_write,
+    is_workspace_admin,
+    require_actor,
+    visible_project_ids,
+)
 from app.services.activity import log_activity
 from app.services.common import next_code
 from app.services.search import suggest_related
@@ -51,6 +60,7 @@ router = APIRouter(prefix="/insights", tags=["insights"])
 @router.get("", response_model=InsightListResponse)
 def list_insights(
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
     q: str | None = Query(default=None, max_length=160),
     project_id: str | None = Query(default=None),
     insight_status: list[str] | None = Query(default=None, alias="status"),
@@ -59,7 +69,13 @@ def list_insights(
     owner_id: str | None = Query(default=None),
     sort: str = Query(default="recent", pattern="^(recent|evidence|confidence|title)$"),
 ) -> InsightListResponse:
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
     stmt = select(Insight)
+    if allowed is not None:
+        if not allowed:
+            return InsightListResponse(items=[], total=0, status_counts={})
+        stmt = stmt.where(Insight.project_id.in_(allowed))
     if q:
         term = f"%{q.lower()}%"
         stmt = stmt.where(
@@ -71,6 +87,7 @@ def list_insights(
             )
         )
     if project_id:
+        assert_project_read(db, user, project_id)
         stmt = stmt.where(Insight.project_id == project_id)
     if insight_status:
         stmt = stmt.where(Insight.status.in_(insight_status))
@@ -93,9 +110,10 @@ def list_insights(
         order = {Confidence.LOW: 0, Confidence.MEDIUM: 1, Confidence.HIGH: 2}
         items.sort(key=lambda i: order.get(Confidence(i.confidence), 0), reverse=True)
 
-    status_counts = dict(
-        db.execute(select(Insight.status, func.count(Insight.id)).group_by(Insight.status)).all()
-    )
+    # Counts must describe the visible rows, not the whole workspace.
+    status_counts: dict[str, int] = {}
+    for item in items:
+        status_counts[item.status] = status_counts.get(item.status, 0) + 1
     return InsightListResponse(items=items, total=len(items), status_counts=status_counts)
 
 
@@ -105,8 +123,13 @@ def create_insight(
     db: Session = Depends(get_db),
     actor: User | None = Depends(get_actor),
 ) -> InsightDetail:
-    if payload.project_id and db.get(ResearchProject, payload.project_id) is None:
-        raise NotFoundError("That research project does not exist.")
+    creator = require_actor(actor)
+    if payload.project_id:
+        if db.get(ResearchProject, payload.project_id) is None:
+            raise NotFoundError("That research project does not exist.")
+        assert_project_write(db, creator, payload.project_id)
+    elif not is_workspace_admin(creator):
+        raise RuleViolationError("An insight must belong to a project you can access.")
     if payload.owner_id and db.get(User, payload.owner_id) is None:
         raise NotFoundError("That insight owner does not exist.")
     if payload.status.value == "validated_internal" and not payload.evidence_ids:
@@ -138,6 +161,7 @@ def create_insight(
         if evidence is None:
             db.rollback()
             raise NotFoundError(f"Evidence '{evidence_id}' does not exist.")
+        assert_project_read(db, creator, evidence.project_id)
         if evidence.project_id != payload.project_id and payload.project_id:
             raise RuleViolationError(
                 "Evidence from a different research project cannot be linked to this insight.",
@@ -168,10 +192,15 @@ def create_insight(
 
 
 @router.get("/{insight_id}", response_model=InsightDetail)
-def get_insight(insight_id: str, db: Session = Depends(get_db)) -> InsightDetail:
+def get_insight(
+    insight_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> InsightDetail:
     insight = db.get(Insight, insight_id)
     if insight is None:
         raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    assert_entity_read(db, actor, insight.project_id)
     return insight_detail(db, insight)
 
 
@@ -185,6 +214,7 @@ def update_insight(
     insight = db.get(Insight, insight_id)
     if insight is None:
         raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    assert_entity_write(db, actor, insight.project_id)
 
     data = payload.model_dump(exclude_unset=True)
     if data.get("status") == "validated_internal" and insight.status != "validated_internal":
@@ -271,9 +301,13 @@ def link_evidence(
     insight = db.get(Insight, insight_id)
     if insight is None:
         raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    assert_entity_write(db, actor, insight.project_id)
     evidence = db.get(Evidence, payload.evidence_id)
     if evidence is None:
         raise NotFoundError(f"Evidence '{payload.evidence_id}' does not exist.")
+    # A cross-project link would leak one project's evidence into another's
+    # insight; both sides must be visible, and they must match.
+    assert_entity_read(db, actor, evidence.project_id)
     _validate_link(db, insight, evidence)
 
     existing = db.execute(
@@ -317,11 +351,16 @@ def link_evidence(
 
 
 @router.get("/{insight_id}/evidence", response_model=InsightEvidenceResponse)
-def list_insight_evidence(insight_id: str, db: Session = Depends(get_db)) -> InsightEvidenceResponse:
+def list_insight_evidence(
+    insight_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> InsightEvidenceResponse:
     """Evidence grouped by the researcher's own classification."""
     insight = db.get(Insight, insight_id)
     if insight is None:
         raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    assert_entity_read(db, actor, insight.project_id)
     return insight_evidence_response(db, insight)
 
 
@@ -341,6 +380,7 @@ def update_evidence_relationship(
     insight = db.get(Insight, insight_id)
     if insight is None:
         raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    assert_entity_write(db, actor, insight.project_id)
     link = _resolve_relationship(db, insight.id, relationship_id)
     evidence = db.get(Evidence, link.evidence_id)
     if evidence is None:
@@ -397,6 +437,7 @@ def unlink_evidence(
     insight = db.get(Insight, insight_id)
     if insight is None:
         raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    assert_entity_write(db, actor, insight.project_id)
     link = _resolve_relationship(db, insight.id, relationship_id)
     evidence = db.get(Evidence, link.evidence_id)
     evidence_code = evidence.code if evidence else "unknown evidence"
@@ -424,30 +465,52 @@ def unlink_evidence(
 
 
 @router.get("/{insight_id}/traceability", response_model=InsightTraceability)
-def get_traceability(insight_id: str, db: Session = Depends(get_db)) -> InsightTraceability:
+def get_traceability(
+    insight_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> InsightTraceability:
     """The complete chain for one insight, including where it was used."""
     insight = db.get(Insight, insight_id)
     if insight is None:
         raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    assert_entity_read(db, actor, insight.project_id)
     return insight_traceability(db, insight)
 
 
 @router.get("/{insight_id}/related", response_model=list[SearchResult])
-def related_research(insight_id: str, db: Session = Depends(get_db)) -> list[SearchResult]:
+def related_research(
+    insight_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> list[SearchResult]:
     insight = db.get(Insight, insight_id)
     if insight is None:
         raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    assert_entity_read(db, actor, insight.project_id)
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
     suggestions, _ = suggest_related(
         db, f"{insight.title} {insight.summary} {' '.join(insight.segments or [])}", limit=5
     )
-    return [s for s in suggestions if s.id != insight.id]
+    return [
+        s
+        for s in suggestions
+        if s.id != insight.id
+        and (allowed is None or (s.project_id is not None and s.project_id in allowed))
+    ]
 
 
 @router.get("/{insight_id}/reuse", response_model=dict)
-def reuse_status(insight_id: str, db: Session = Depends(get_db)) -> dict:
+def reuse_status(
+    insight_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> dict:
     insight = db.get(Insight, insight_id)
     if insight is None:
         raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+    assert_entity_read(db, actor, insight.project_id)
     return {
         "insight_id": insight.id,
         "reused": insight_is_reused(db, insight),

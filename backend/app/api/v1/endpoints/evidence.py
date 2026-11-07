@@ -18,6 +18,14 @@ from app.models import Evidence, InsightEvidence, Interview, Participant, User
 from app.schemas.common import Message
 from app.schemas.evidence import EvidenceCreate, EvidenceListResponse, EvidenceOut, EvidenceStats, EvidenceUpdate
 from app.schemas.traceability import EvidenceInsightsResponse
+from app.services.access import (
+    assert_entity_read,
+    assert_entity_write,
+    assert_project_read,
+    assert_project_write,
+    require_actor,
+    visible_project_ids,
+)
 from app.services.activity import log_activity
 from app.services.common import next_code
 from app.services.serializers import evidence_insights, evidence_out
@@ -28,6 +36,7 @@ router = APIRouter(prefix="/evidence", tags=["evidence"])
 @router.get("", response_model=EvidenceListResponse)
 def list_evidence(
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
     project_id: str | None = Query(default=None),
     interview_id: str | None = Query(default=None),
     participant_id: str | None = Query(default=None),
@@ -38,8 +47,15 @@ def list_evidence(
     unverified_only: bool = Query(default=False),
     feedback_record_id: str | None = Query(default=None),
 ) -> EvidenceListResponse:
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
     stmt = select(Evidence)
+    if allowed is not None:
+        if not allowed:
+            return EvidenceListResponse(items=[], total=0, type_counts={}, unverified_count=0)
+        stmt = stmt.where(Evidence.project_id.in_(allowed))
     if project_id:
+        assert_project_read(db, user, project_id)
         stmt = stmt.where(Evidence.project_id == project_id)
     if feedback_record_id:
         stmt = stmt.where(Evidence.feedback_record_id == feedback_record_id)
@@ -67,12 +83,11 @@ def list_evidence(
 
     stmt = stmt.order_by(Evidence.captured_at.desc())
     rows = db.execute(stmt).scalars().unique().all()
-    type_counts = dict(
-        db.execute(select(Evidence.evidence_type, func.count(Evidence.id)).group_by(Evidence.evidence_type)).all()
-    )
-    unverified = db.execute(
-        select(func.count(Evidence.id)).where(Evidence.provenance_status != "recorded")
-    ).scalar_one()
+    # Counts describe the rows this caller may see, never the whole workspace.
+    type_counts: dict[str, int] = {}
+    for row in rows:
+        type_counts[row.evidence_type] = type_counts.get(row.evidence_type, 0) + 1
+    unverified = len([row for row in rows if row.provenance_status != "recorded"])
     return EvidenceListResponse(
         items=[evidence_out(db, e) for e in rows],
         total=len(rows),
@@ -82,9 +97,20 @@ def list_evidence(
 
 
 @router.get("/stats", response_model=EvidenceStats)
-def evidence_stats(db: Session = Depends(get_db), project_id: str | None = Query(default=None)) -> EvidenceStats:
+def evidence_stats(
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+    project_id: str | None = Query(default=None),
+) -> EvidenceStats:
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
     stmt = select(Evidence)
+    if allowed is not None:
+        if not allowed:
+            return EvidenceStats(total=0, by_type={}, unverified=0, unreviewed=0)
+        stmt = stmt.where(Evidence.project_id.in_(allowed))
     if project_id:
+        assert_project_read(db, user, project_id)
         stmt = stmt.where(Evidence.project_id == project_id)
     rows = db.execute(stmt).scalars().all()
     by_type: dict[str, int] = {}
@@ -107,6 +133,7 @@ def create_evidence(
     interview = db.get(Interview, payload.interview_id)
     if interview is None:
         raise NotFoundError("Evidence must be attached to an existing interview.")
+    assert_project_write(db, actor, interview.project_id)
     if interview.status == "cancelled":
         raise RuleViolationError("A cancelled interview cannot produce evidence.")
 
@@ -160,19 +187,29 @@ def create_evidence(
 
 
 @router.get("/{evidence_id}", response_model=EvidenceOut)
-def get_evidence(evidence_id: str, db: Session = Depends(get_db)) -> EvidenceOut:
+def get_evidence(
+    evidence_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> EvidenceOut:
     evidence = db.get(Evidence, evidence_id)
     if evidence is None:
         raise NotFoundError(f"Evidence '{evidence_id}' does not exist.")
+    assert_entity_read(db, actor, evidence.project_id)
     return evidence_out(db, evidence)
 
 
 @router.get("/{evidence_id}/insights", response_model=EvidenceInsightsResponse)
-def list_evidence_insights(evidence_id: str, db: Session = Depends(get_db)) -> EvidenceInsightsResponse:
+def list_evidence_insights(
+    evidence_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> EvidenceInsightsResponse:
     """Every insight this item supports, contradicts or contextualises."""
     evidence = db.get(Evidence, evidence_id)
     if evidence is None:
         raise NotFoundError(f"Evidence '{evidence_id}' does not exist.")
+    assert_entity_read(db, actor, evidence.project_id)
     return evidence_insights(db, evidence)
 
 
@@ -181,10 +218,12 @@ def update_evidence(
     evidence_id: str,
     payload: EvidenceUpdate,
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
 ) -> EvidenceOut:
     evidence = db.get(Evidence, evidence_id)
     if evidence is None:
         raise NotFoundError(f"Evidence '{evidence_id}' does not exist.")
+    assert_entity_write(db, actor, evidence.project_id)
 
     data = payload.model_dump(exclude_unset=True)
     if "provenance" in data:
@@ -212,6 +251,7 @@ def delete_evidence(
     evidence = db.get(Evidence, evidence_id)
     if evidence is None:
         raise NotFoundError(f"Evidence '{evidence_id}' does not exist.")
+    assert_entity_write(db, actor, evidence.project_id)
     linked = db.execute(
         select(func.count(InsightEvidence.id)).where(InsightEvidence.evidence_id == evidence.id)
     ).scalar_one()

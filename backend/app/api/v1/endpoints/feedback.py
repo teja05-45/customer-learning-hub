@@ -20,6 +20,14 @@ from app.models.enums import FeedbackSourceType, feedback_depth
 from app.schemas.common import Message, Ref
 from app.schemas.evidence import EvidenceOut
 from app.schemas.feedback import FeedbackCreate, FeedbackListResponse, FeedbackOut, FeedbackUpdate
+from app.services.access import (
+    assert_entity_read,
+    assert_entity_write,
+    assert_project_read,
+    assert_project_write,
+    require_actor,
+    visible_project_ids,
+)
 from app.services.activity import log_activity
 from app.services.common import next_code
 from app.services.serializers import evidence_out
@@ -131,6 +139,7 @@ def _validate(
 @router.get("", response_model=FeedbackListResponse)
 def list_feedback(
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
     project_id: str | None = Query(default=None),
     participant_id: str | None = Query(default=None),
     source_type: list[str] | None = Query(default=None),
@@ -138,8 +147,17 @@ def list_feedback(
     unattributed_only: bool = Query(default=False),
     q: str | None = Query(default=None, max_length=120),
 ) -> FeedbackListResponse:
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
     stmt = select(FeedbackRecord)
+    if allowed is not None:
+        if not allowed:
+            return FeedbackListResponse(
+                items=[], total=0, source_counts={}, unverified_count=0, unattributed_count=0
+            )
+        stmt = stmt.where(FeedbackRecord.project_id.in_(allowed))
     if project_id:
+        assert_project_read(db, user, project_id)
         stmt = stmt.where(FeedbackRecord.project_id == project_id)
     if participant_id:
         stmt = stmt.where(FeedbackRecord.participant_id == participant_id)
@@ -162,19 +180,11 @@ def list_feedback(
         )
 
     rows = db.execute(stmt.order_by(FeedbackRecord.collected_at.desc())).scalars().unique().all()
-    source_counts = dict(
-        db.execute(
-            select(FeedbackRecord.source_type, func.count(FeedbackRecord.id)).group_by(
-                FeedbackRecord.source_type
-            )
-        ).all()
-    )
-    unverified = db.execute(
-        select(func.count(FeedbackRecord.id)).where(FeedbackRecord.verification_status != "verified")
-    ).scalar_one()
-    unattributed = db.execute(
-        select(func.count(FeedbackRecord.id)).where(FeedbackRecord.participant_id.is_(None))
-    ).scalar_one()
+    source_counts: dict[str, int] = {}
+    for row in rows:
+        source_counts[row.source_type] = source_counts.get(row.source_type, 0) + 1
+    unverified = len([row for row in rows if row.verification_status != "verified"])
+    unattributed = len([row for row in rows if row.participant_id is None])
 
     return FeedbackListResponse(
         items=[_feedback_out(db, row) for row in rows],
@@ -204,6 +214,7 @@ def create_feedback(
         collected_at=collected_at,
     )
 
+    assert_project_write(db, actor, project.id)
     record = FeedbackRecord(
         code=next_code(db, FeedbackRecord, "code", "FB"),
         project_id=project.id,
@@ -240,10 +251,15 @@ def create_feedback(
 
 
 @router.get("/{feedback_id}", response_model=FeedbackOut)
-def get_feedback(feedback_id: str, db: Session = Depends(get_db)) -> FeedbackOut:
+def get_feedback(
+    feedback_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> FeedbackOut:
     record = db.get(FeedbackRecord, feedback_id)
     if record is None:
         raise NotFoundError(f"Feedback source '{feedback_id}' does not exist.")
+    assert_entity_read(db, actor, record.project_id)
     return _feedback_out(db, record)
 
 
@@ -257,6 +273,7 @@ def update_feedback(
     record = db.get(FeedbackRecord, feedback_id)
     if record is None:
         raise NotFoundError(f"Feedback source '{feedback_id}' does not exist.")
+    assert_entity_write(db, actor, record.project_id)
 
     data = payload.model_dump(exclude_unset=True)
     candidate_participant = data.get("participant_id", record.participant_id)
@@ -326,6 +343,7 @@ def create_evidence_from_feedback(
     record = db.get(FeedbackRecord, feedback_id)
     if record is None:
         raise NotFoundError(f"Feedback source '{feedback_id}' does not exist.")
+    assert_entity_write(db, actor, record.project_id)
 
     existing = db.execute(
         select(Evidence).where(Evidence.feedback_record_id == record.id)
@@ -384,10 +402,15 @@ def create_evidence_from_feedback(
 
 
 @router.get("/{feedback_id}/evidence", response_model=list[EvidenceOut], tags=["evidence"])
-def list_feedback_evidence(feedback_id: str, db: Session = Depends(get_db)) -> list[EvidenceOut]:
+def list_feedback_evidence(
+    feedback_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> list[EvidenceOut]:
     record = db.get(FeedbackRecord, feedback_id)
     if record is None:
         raise NotFoundError(f"Feedback source '{feedback_id}' does not exist.")
+    assert_entity_read(db, actor, record.project_id)
     rows = db.execute(
         select(Evidence).where(Evidence.feedback_record_id == record.id).order_by(Evidence.captured_at.asc())
     ).scalars().all()
@@ -403,6 +426,7 @@ def delete_feedback(
     record = db.get(FeedbackRecord, feedback_id)
     if record is None:
         raise NotFoundError(f"Feedback source '{feedback_id}' does not exist.")
+    assert_entity_write(db, actor, record.project_id)
     code = record.code
     log_activity(
         db,

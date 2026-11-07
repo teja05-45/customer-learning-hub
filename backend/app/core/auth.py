@@ -9,6 +9,7 @@ cover all routes by default. A route added later is protected unless it is
 explicitly listed as public, which is the safer failure mode.
 """
 
+import re
 from datetime import datetime, timezone
 
 from fastapi import Request
@@ -38,6 +39,12 @@ RESEARCH_WRITE_ROLES = {"researcher", "admin"}
 BUSINESS_WRITE_ROLES = {"researcher", "business_owner", "ceo", "admin"}
 ADMIN_ROLES = {"admin", "researcher"}
 USER_ADMIN_ROLES = {"admin"}
+ALL_ROLES = {"admin", "researcher", "business_owner", "ceo", "cx"}
+
+# /projects/{id}/members and /projects/{id}/members/{membership_id}. Membership
+# is a project-level concern: the workspace role must not decide it, because a
+# business owner can own a project. The endpoint itself enforces project_owner.
+MEMBER_MANAGEMENT = re.compile(r"^/projects/[^/]+/members(?:/[^/]+)?$")
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
@@ -78,8 +85,17 @@ def roles_for_write(method: str, path: str) -> set[str] | None:
         # Account administration is the administrator's job alone; a researcher
         # must not be able to mint an account or change a role.
         return USER_ADMIN_ROLES
-    if relative.startswith(("/demo", "/settings")):
+    if relative.startswith("/demo"):
+        # Restoring the synthetic dataset is a demonstration control, available
+        # to the researcher who runs the demo as well as administrators.
         return ADMIN_ROLES
+    if relative.startswith("/settings"):
+        # Workspace configuration is administrator-only; a researcher runs
+        # studies, not the workspace.
+        return USER_ADMIN_ROLES
+    if MEMBER_MANAGEMENT.match(relative):
+        # Any signed-in role may call it; ``assert_project_manage`` decides.
+        return ALL_ROLES
     if relative.startswith(
         (
             "/projects",
@@ -92,7 +108,7 @@ def roles_for_write(method: str, path: str) -> set[str] | None:
         )
     ):
         return RESEARCH_WRITE_ROLES
-    if relative.startswith(("/decisions", "/actions")):
+    if relative.startswith(("/decisions", "/actions", "/outcomes")):
         return BUSINESS_WRITE_ROLES
     return ADMIN_ROLES
 

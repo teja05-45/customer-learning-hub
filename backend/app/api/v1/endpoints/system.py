@@ -39,6 +39,12 @@ from app.schemas.dashboard import (
     SessionResponse,
 )
 from app.seed.demo_data import seed_demo_data
+from app.services.access import (
+    participant_project_ids,
+    project_of_action,
+    require_actor,
+    visible_project_ids,
+)
 from app.services.activity import log_activity
 from app.services.analytics import build_analytics
 from app.services.dashboard import build_dashboard
@@ -73,8 +79,13 @@ ROLE_DESCRIPTIONS = {
 
 # ---------------------------------------------------------------- dashboard
 @router.get("/dashboard", response_model=DashboardResponse, tags=["dashboard"])
-def get_dashboard(db: Session = Depends(get_db), months: int = Query(default=6, ge=3, le=12)) -> DashboardResponse:
-    return build_dashboard(db, months=months)
+def get_dashboard(
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+    months: int = Query(default=6, ge=3, le=12),
+) -> DashboardResponse:
+    user = require_actor(actor)
+    return build_dashboard(db, months=months, project_ids=visible_project_ids(db, user))
 
 
 # ------------------------------------------------------------------- search
@@ -83,14 +94,41 @@ def global_search(
     q: str = Query(min_length=1, max_length=160),
     types: list[str] | None = Query(default=None),
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
 ) -> SearchResponse:
-    return search(db, q, types=types)
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
+    result = search(db, q, types=types)
+    if allowed is None:
+        return result
+
+    def readable(item) -> bool:
+        if item.entity_type == "participant":
+            return bool(participant_project_ids(db, item.id) & allowed)
+        return item.project_id is not None and item.project_id in allowed
+
+    groups = [
+        group.model_copy(update={"items": [item for item in group.items if readable(item)]})
+        for group in result.groups
+    ]
+    groups = [group for group in groups if group.items]
+    return result.model_copy(
+        update={
+            "groups": groups,
+            "total": sum(len(group.items) for group in groups),
+            "suggestions": [item for item in result.suggestions if readable(item)],
+        }
+    )
 
 
 # ---------------------------------------------------------------- analytics
 @router.get("/analytics", response_model=AnalyticsResponse, tags=["analytics"])
-def get_analytics(db: Session = Depends(get_db)) -> AnalyticsResponse:
-    return build_analytics(db)
+def get_analytics(
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> AnalyticsResponse:
+    user = require_actor(actor)
+    return build_analytics(db, project_ids=visible_project_ids(db, user))
 
 
 # ------------------------------------------------------------------ session
@@ -290,7 +328,7 @@ TRACEABILITY_FIELDS = [
 ]
 
 
-def _traceability_records(db: Session) -> list[dict]:
+def _traceability_records(db: Session, allowed: set[str] | None = None) -> list[dict]:
     """One row per insight-evidence relationship, in a stable order.
 
     The original customer statement is exported exactly as stored. Attribution
@@ -306,6 +344,8 @@ def _traceability_records(db: Session) -> list[dict]:
 
     rows: list[dict] = []
     for link, insight, evidence in links:
+        if allowed is not None and insight.project_id not in allowed:
+            continue
         project = db.get(ResearchProject, insight.project_id) if insight.project_id else None
         participant = db.get(Participant, evidence.participant_id) if evidence.participant_id else None
         creator = db.get(User, link.created_by_id) if link.created_by_id else None
@@ -353,12 +393,23 @@ def export_csv(entity: str, db: Session = Depends(get_db), actor: User | None = 
         # Defence in depth: the middleware already rejects anonymous requests.
         raise UnauthorizedError("Sign in to export records.")
 
+    allowed = visible_project_ids(db, actor)
     origin = "synthetic" if app_settings.demo_mode else "live"
     if entity == "traceability":
-        return _traceability_export(db, actor, origin)
+        return _traceability_export(db, actor, origin, allowed)
 
     model, fields = EXPORT_SPECS[entity]
     rows = db.execute(select(model)).scalars().all()
+    if allowed is not None:
+        # An export must not become a bulk bypass of project isolation.
+        if entity == "projects":
+            rows = [row for row in rows if row.id in allowed]
+        elif entity == "participants":
+            rows = [row for row in rows if participant_project_ids(db, row.id) & allowed]
+        elif entity == "actions":
+            rows = [row for row in rows if project_of_action(db, row.id) in allowed]
+        else:
+            rows = [row for row in rows if getattr(row, "project_id", None) in allowed]
 
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -396,8 +447,10 @@ def export_csv(entity: str, db: Session = Depends(get_db), actor: User | None = 
     )
 
 
-def _traceability_export(db: Session, actor: User, origin: str) -> Response:
-    records = _traceability_records(db)
+def _traceability_export(
+    db: Session, actor: User, origin: str, allowed: set[str] | None = None
+) -> Response:
+    records = _traceability_records(db, allowed)
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow([*TRACEABILITY_FIELDS, "data_origin", "exported_at"])

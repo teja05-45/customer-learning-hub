@@ -36,6 +36,15 @@ from app.schemas.decision import (
     DecisionUpdate,
 )
 from app.schemas.traceability import DecisionTraceability
+from app.services.access import (
+    assert_entity_read,
+    assert_entity_write,
+    assert_project_read,
+    assert_project_write,
+    is_workspace_admin,
+    require_actor,
+    visible_project_ids,
+)
 from app.services.activity import log_activity
 from app.services.common import next_code
 from app.services.serializers import (
@@ -51,6 +60,7 @@ router = APIRouter(prefix="/decisions", tags=["decisions"])
 @router.get("", response_model=DecisionListResponse)
 def list_decisions(
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
     q: str | None = Query(default=None, max_length=160),
     decision_status: list[str] | None = Query(default=None, alias="status"),
     business_function: list[str] | None = Query(default=None),
@@ -59,7 +69,13 @@ def list_decisions(
     has_evidence: bool | None = Query(default=None),
     sort: str = Query(default="recent", pattern="^(recent|date|title)$"),
 ) -> DecisionListResponse:
+    user = require_actor(actor)
+    allowed = visible_project_ids(db, user)
     stmt = select(Decision)
+    if allowed is not None:
+        if not allowed:
+            return DecisionListResponse(items=[], total=0, status_counts={}, unevidenced=0)
+        stmt = stmt.where(Decision.project_id.in_(allowed))
     if q:
         term = f"%{q.lower()}%"
         stmt = stmt.where(
@@ -75,6 +91,7 @@ def list_decisions(
     if business_function:
         stmt = stmt.where(Decision.business_function.in_(business_function))
     if project_id:
+        assert_project_read(db, user, project_id)
         stmt = stmt.where(Decision.project_id == project_id)
     if owner_id:
         stmt = stmt.where(Decision.owner_id == owner_id)
@@ -89,9 +106,9 @@ def list_decisions(
     if has_evidence is not None:
         items = [d for d in items if (d.insight_count + d.evidence_count > 0) == has_evidence]
 
-    status_counts = dict(
-        db.execute(select(Decision.status, func.count(Decision.id)).group_by(Decision.status)).all()
-    )
+    status_counts: dict[str, int] = {}
+    for item in items:
+        status_counts[item.status] = status_counts.get(item.status, 0) + 1
     unevidenced = len([d for d in items if d.insight_count == 0 and d.evidence_count == 0])
     return DecisionListResponse(items=items, total=len(items), status_counts=status_counts, unevidenced=unevidenced)
 
@@ -102,8 +119,12 @@ def create_decision(
     db: Session = Depends(get_db),
     actor: User | None = Depends(get_actor),
 ) -> DecisionDetail:
-    if payload.project_id and db.get(ResearchProject, payload.project_id) is None:
-        raise NotFoundError("That research project does not exist.")
+    creator = require_actor(actor)
+    project_id = payload.project_id
+    if project_id:
+        if db.get(ResearchProject, project_id) is None:
+            raise NotFoundError("That research project does not exist.")
+        assert_project_write(db, creator, project_id)
     if payload.owner_id and db.get(User, payload.owner_id) is None:
         raise NotFoundError("That decision owner does not exist.")
 
@@ -115,7 +136,7 @@ def create_decision(
         description=payload.description.strip(),
         rationale=payload.rationale,
         limitations=payload.limitations,
-        project_id=payload.project_id,
+        project_id=project_id,
         owner_id=payload.owner_id or (actor.id if actor else None),
         decision_date=payload.decision_date,
         status=payload.status.value,
@@ -130,12 +151,25 @@ def create_decision(
         if insight is None:
             db.rollback()
             raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+        assert_entity_read(db, creator, insight.project_id)
+        if decision.project_id is None:
+            # Attaching project evidence makes this a project decision.
+            decision.project_id = insight.project_id
+        if insight.project_id != decision.project_id:
+            db.rollback()
+            raise RuleViolationError("An insight from a different project cannot be linked to this decision.")
         db.add(DecisionInsight(decision_id=decision.id, insight_id=insight.id))
     for evidence_id in payload.evidence_ids:
         evidence = db.get(Evidence, evidence_id)
         if evidence is None:
             db.rollback()
             raise NotFoundError(f"Evidence '{evidence_id}' does not exist.")
+        assert_entity_read(db, creator, evidence.project_id)
+        if decision.project_id is None:
+            decision.project_id = evidence.project_id
+        if evidence.project_id != decision.project_id:
+            db.rollback()
+            raise RuleViolationError("Evidence from a different project cannot be linked to this decision.")
         db.add(DecisionEvidence(decision_id=decision.id, evidence_id=evidence.id, role="supporting"))
         linked_evidence += 1
 
@@ -159,19 +193,29 @@ def create_decision(
 
 
 @router.get("/{decision_id}", response_model=DecisionDetail)
-def get_decision(decision_id: str, db: Session = Depends(get_db)) -> DecisionDetail:
+def get_decision(
+    decision_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> DecisionDetail:
     decision = db.get(Decision, decision_id)
     if decision is None:
         raise NotFoundError(f"Decision '{decision_id}' does not exist.")
+    assert_entity_read(db, actor, decision.project_id, decision.owner_id)
     return decision_detail(db, decision)
 
 
 @router.get("/{decision_id}/traceability", response_model=DecisionTraceability)
-def get_decision_traceability(decision_id: str, db: Session = Depends(get_db)) -> DecisionTraceability:
+def get_decision_traceability(
+    decision_id: str,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_actor),
+) -> DecisionTraceability:
     """Walk backwards from the decision to the customer statements behind it."""
     decision = db.get(Decision, decision_id)
     if decision is None:
         raise NotFoundError(f"Decision '{decision_id}' does not exist.")
+    assert_entity_read(db, actor, decision.project_id, decision.owner_id)
     return decision_traceability(db, decision)
 
 
@@ -185,6 +229,7 @@ def update_decision(
     decision = db.get(Decision, decision_id)
     if decision is None:
         raise NotFoundError(f"Decision '{decision_id}' does not exist.")
+    assert_entity_write(db, actor, decision.project_id, decision.owner_id)
 
     data = payload.model_dump(exclude_unset=True)
     new_status = data.get("status")
@@ -223,6 +268,7 @@ def link_evidence(
     decision = db.get(Decision, decision_id)
     if decision is None:
         raise NotFoundError(f"Decision '{decision_id}' does not exist.")
+    assert_entity_write(db, actor, decision.project_id, decision.owner_id)
     if not payload.insight_ids and not payload.evidence_ids:
         raise RuleViolationError("Provide at least one insight or evidence id to link.")
 
@@ -231,6 +277,11 @@ def link_evidence(
         insight = db.get(Insight, insight_id)
         if insight is None:
             raise NotFoundError(f"Insight '{insight_id}' does not exist.")
+        assert_entity_read(db, actor, insight.project_id)
+        if decision.project_id is None:
+            decision.project_id = insight.project_id
+        if insight.project_id != decision.project_id:
+            raise RuleViolationError("An insight from a different project cannot be linked to this decision.")
         exists = db.execute(
             select(DecisionInsight).where(
                 DecisionInsight.decision_id == decision.id, DecisionInsight.insight_id == insight.id
@@ -245,6 +296,11 @@ def link_evidence(
         evidence = db.get(Evidence, evidence_id)
         if evidence is None:
             raise NotFoundError(f"Evidence '{evidence_id}' does not exist.")
+        assert_entity_read(db, actor, evidence.project_id)
+        if decision.project_id is None:
+            decision.project_id = evidence.project_id
+        if evidence.project_id != decision.project_id:
+            raise RuleViolationError("Evidence from a different project cannot be linked to this decision.")
         exists = db.execute(
             select(DecisionEvidence).where(
                 DecisionEvidence.decision_id == decision.id, DecisionEvidence.evidence_id == evidence.id
@@ -291,6 +347,7 @@ def unlink_source(
     decision = db.get(Decision, decision_id)
     if decision is None:
         raise NotFoundError(f"Decision '{decision_id}' does not exist.")
+    assert_entity_write(db, actor, decision.project_id, decision.owner_id)
     model = DecisionInsight if kind == "insight" else DecisionEvidence
     column = "insight_id" if kind == "insight" else "evidence_id"
     link = db.execute(
@@ -339,8 +396,16 @@ def create_action(
     decision = db.get(Decision, decision_id)
     if decision is None:
         raise NotFoundError(f"Decision '{decision_id}' does not exist.")
+    assert_entity_write(db, actor, decision.project_id, decision.owner_id)
     if payload.owner_id and db.get(User, payload.owner_id) is None:
         raise NotFoundError("That action owner does not exist.")
+    if payload.insight_id:
+        linked_insight = db.get(Insight, payload.insight_id)
+        if linked_insight is None:
+            raise NotFoundError("That insight does not exist.")
+        assert_entity_read(db, actor, linked_insight.project_id)
+        if linked_insight.project_id != decision.project_id:
+            raise RuleViolationError("An insight from a different project cannot be linked to this action.")
 
     action = BusinessAction(
         code=next_code(db, BusinessAction, "code", "ACT", width=3),

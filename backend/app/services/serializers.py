@@ -156,7 +156,12 @@ def project_counts_map(db: Session, project_ids: list[str]) -> dict[str, Project
     return counts
 
 
-def project_summary(db: Session, project: ResearchProject, users: dict[str, Ref] | None = None) -> ProjectSummary:
+def project_summary(
+    db: Session,
+    project: ResearchProject,
+    users: dict[str, Ref] | None = None,
+    role: str | None = None,
+) -> ProjectSummary:
     users = users or user_map(db, {project.owner_id})
     counts = project_counts_map(db, [project.id])[project.id]
     unresolved = len([q for q in project.questions if not q.is_resolved])
@@ -171,6 +176,7 @@ def project_summary(db: Session, project: ResearchProject, users: dict[str, Ref]
         counts=counts,
         unresolved_questions=unresolved,
         segment_gap=segment_gap,
+        role=role,
     )
 
 
@@ -195,8 +201,8 @@ def project_out_dict(project: ResearchProject) -> dict:
     }
 
 
-def project_detail(db: Session, project: ResearchProject) -> ProjectDetail:
-    summary = project_summary(db, project)
+def project_detail(db: Session, project: ResearchProject, role: str | None = None) -> ProjectDetail:
+    summary = project_summary(db, project, role=role)
     return ProjectDetail(
         **summary.model_dump(),
         questions=[q for q in project.questions],

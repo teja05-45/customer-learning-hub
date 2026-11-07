@@ -16,7 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.base import IdMixin, TimestampMixin, utcnow
+from app.models.base import IdMixin, TimestampMixin, new_id, utcnow
 
 
 class Insight(Base, IdMixin, TimestampMixin):
@@ -114,6 +114,9 @@ class Decision(Base, IdMixin, TimestampMixin):
         back_populates="decision", cascade="all, delete-orphan"
     )
     actions: Mapped[list["BusinessAction"]] = relationship(back_populates="decision")
+    outcomes: Mapped[list["Outcome"]] = relationship(
+        back_populates="decision", cascade="all, delete-orphan"
+    )
 
     @property
     def has_evidence(self) -> bool:
@@ -183,6 +186,46 @@ class BusinessAction(Base, IdMixin, TimestampMixin):
             and self.status not in ("completed",)
             and self.due_date < datetime.now().date()
         )
+
+
+class Outcome(Base, IdMixin, TimestampMixin):
+    """The measured result of a decision, kept separate from the decision itself.
+
+    A decision records what the team chose to do. An outcome records what was
+    expected to change, how it would be measured, and what actually happened.
+    Storing the expectation and the result in the same append-only history is
+    what stops a team from rewriting the target after the fact.
+    """
+
+    __tablename__ = "outcomes"
+
+    code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(240), nullable=False)
+    decision_id: Mapped[str] = mapped_column(
+        ForeignKey("decisions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    metric_definition: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    baseline_value: Mapped[float | None] = mapped_column(nullable=True)
+    target_value: Mapped[float | None] = mapped_column(nullable=True)
+    actual_value: Mapped[float | None] = mapped_column(nullable=True)
+    unit: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    direction: Mapped[str] = mapped_column(String(16), nullable=False, default="increase")
+    measurement_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    measurement_end: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="planned", index=True)
+    owner_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    data_source: Mapped[str] = mapped_column(String(240), nullable=False, default="")
+    recorded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    decision: Mapped["Decision"] = relationship(back_populates="outcomes")
+    action: Mapped["BusinessAction | None"] = relationship()
+    owner: Mapped["User | None"] = relationship(foreign_keys=[owner_id])  # noqa: F821
+
+    __table_args__ = (Index("ix_outcomes_decision_status", "decision_id", "status"),)
 
 
 class OrganizationSetting(Base):
