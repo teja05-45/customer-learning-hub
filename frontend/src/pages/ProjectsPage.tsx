@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, FolderKanban, Plus, Search } from 'lucide-react'
 import { api, toQuery } from '../services/api'
+import { useSession } from '../app/SessionProvider'
 import type { ProjectListResponse, ProjectStatus } from '../types'
 import {
   EmptyState,
@@ -25,6 +26,10 @@ const STATUS_FILTERS: { value: ProjectStatus | 'all'; label: string }[] = [
 ]
 
 export function ProjectsPage() {
+  const { user } = useSession()
+  // Only researchers and administrators may create a project; the API enforces
+  // this too, but hiding the action avoids offering a guaranteed failure.
+  const canCreate = user?.role === 'researcher' || user?.role === 'admin'
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
 
@@ -47,9 +52,11 @@ export function ProjectsPage() {
         title="Research projects"
         description="Each project starts from a written question, not a task to book interviews. Status shows where the work actually is."
         actions={
-          <Link to="/projects/new" className="btn btn-primary">
-            <Plus size={14} /> New project
-          </Link>
+          canCreate ? (
+            <Link to="/projects/new" className="btn btn-primary">
+              <Plus size={14} /> New project
+            </Link>
+          ) : undefined
         }
       />
 
@@ -111,11 +118,11 @@ export function ProjectsPage() {
                 >
                   Clear filters
                 </button>
-              ) : (
+              ) : canCreate ? (
                 <Link to="/projects/new" className="btn btn-primary btn-sm">
                   <Plus size={13} /> Create the first project
                 </Link>
-              )
+              ) : undefined
             }
           />
         )}

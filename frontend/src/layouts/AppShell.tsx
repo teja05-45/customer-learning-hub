@@ -16,6 +16,7 @@ import {
   Scale,
   Search,
   Settings,
+  Target,
   UserPlus,
   Users,
   X,
@@ -23,6 +24,7 @@ import {
 import { api } from '../services/api'
 import type { Dashboard } from '../types'
 import { useSession } from '../app/SessionProvider'
+import { useProject } from '../app/ProjectProvider'
 import { GlobalSearch } from '../components/GlobalSearch'
 import { relativeTime } from '../utils/format'
 
@@ -38,12 +40,14 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   insights: 'Insights library',
   decisions: 'Decisions & actions',
   actions: 'Actions',
+  outcomes: 'Outcome measurement',
   analytics: 'Analytics',
   settings: 'Settings',
 }
 
 export function AppShell() {
   const { user, leave, isDemo } = useSession()
+  const { projects, activeProjectId, selectProject, role, isLoading: projectsLoading } = useProject()
   const location = useLocation()
   const navigate = useNavigate()
   const [searchOpen, setSearchOpen] = useState(false)
@@ -105,6 +109,7 @@ export function AppShell() {
       icon: Scale,
       count: dashboard?.open_actions ?? undefined,
     },
+    { to: '/outcomes', label: 'Outcome measurement', icon: Target },
     { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   ]
 
@@ -135,6 +140,37 @@ export function AppShell() {
         </div>
 
         <div className="sidebar-scroll">
+          <div className="nav-section-label">Current project</div>
+          <div className="project-switcher">
+            {projectsLoading ? (
+              <span className="definition">Loading projects…</span>
+            ) : projects.length === 0 ? (
+              <span className="definition">No projects yet. A workspace administrator can grant access.</span>
+            ) : (
+              <>
+                <label className="visually-hidden" htmlFor="project-switcher">
+                  Current project
+                </label>
+                <select
+                  id="project-switcher"
+                  className="form-select form-select-sm"
+                  value={activeProjectId ?? ''}
+                  onChange={(event) => selectProject(event.target.value || null)}
+                >
+                  <option value="">All accessible projects</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="cell-sub" style={{ marginTop: 4 }}>
+                  {role ? `Your access: ${role.replace('_', ' ')}` : 'Select a project to see your access level'}
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="nav-section-label">Research workspace</div>
           <nav className="sidebar-nav">
             {navItems.slice(0, 5).map((item) => (
@@ -164,13 +200,17 @@ export function AppShell() {
             ))}
           </nav>
 
-          <div className="nav-section-label">Organisation</div>
-          <nav className="sidebar-nav">
-            <NavLink to="/settings" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-              <Settings size={16} className="nav-icon" />
-              Settings
-            </NavLink>
-          </nav>
+          {user?.role === 'admin' && (
+            <>
+              <div className="nav-section-label">Organisation</div>
+              <nav className="sidebar-nav">
+                <NavLink to="/settings" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+                  <Settings size={16} className="nav-icon" />
+                  Settings
+                </NavLink>
+              </nav>
+            </>
+          )}
         </div>
 
         <div className="sidebar-footer">

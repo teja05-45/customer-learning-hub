@@ -141,6 +141,18 @@ export interface ProjectSummary {
   counts: ProjectCounts
   unresolved_questions: number
   segment_gap: boolean
+  role?: ProjectRole | null
+}
+
+export type ProjectRole = 'viewer' | 'editor' | 'project_owner'
+
+export interface ProjectMember {
+  id: string
+  project_id: string
+  user: Ref
+  role: ProjectRole
+  created_at: string
+  email: string
 }
 
 export interface ProjectDetail extends ProjectSummary {
@@ -198,9 +210,26 @@ export interface ParticipationHistoryItem {
   insight_count: number
 }
 
+export interface ParticipantFeedbackItem {
+  id: string
+  code: string
+  project_id: string
+  project_name: string
+  source_type: FeedbackSourceType
+  collection_method: CollectionMethod
+  collected_at: string
+  content: string
+  interpretation: string
+  verification_status: VerificationStatus
+  research_depth: ResearchDepth
+  interview_id: string | null
+  interview_code: string | null
+}
+
 export interface ParticipantDetail extends Participant {
   recruitment: RecruitmentRecord[]
   participation_history: ParticipationHistoryItem[]
+  feedback_history: ParticipantFeedbackItem[]
   evidence_count: number
 }
 
@@ -583,6 +612,84 @@ export interface Analytics {
   }[]
   measurement_gaps: { key: string; label: string; why: string; how_to_collect: string }[]
   honesty_note: string
+}
+
+export type OutcomeStatus = 'planned' | 'measurement_pending' | 'achieved' | 'not_achieved' | 'inconclusive'
+export type OutcomeDirection = 'increase' | 'decrease'
+
+export interface Outcome {
+  id: string
+  code: string
+  name: string
+  decision_id: string
+  action_id: string | null
+  metric_definition: string
+  baseline_value: number | null
+  target_value: number | null
+  actual_value: number | null
+  unit: string
+  direction: OutcomeDirection
+  measurement_start: string | null
+  measurement_end: string | null
+  status: OutcomeStatus
+  owner_id: string | null
+  data_source: string
+  recorded_at: string | null
+  notes: string
+  created_at: string
+  updated_at: string
+  decision?: Ref | null
+  action?: Ref | null
+  owner?: Ref | null
+  project_id: string | null
+  is_overdue: boolean
+  status_reason: string
+}
+
+export interface OutcomeListResponse {
+  items: Outcome[]
+  total: number
+  status_counts: Record<string, number>
+  measurement_due: number
+}
+
+export interface JourneyCard {
+  id: string
+  code: string
+  title: string
+  subtitle: string
+  status: string
+  href: string
+  at: string | null
+  overdue: boolean
+}
+
+export interface JourneyStage {
+  key: string
+  label: string
+  description: string
+  count: number
+  status: string
+  items: JourneyCard[]
+}
+
+export interface JourneyTimelineItem {
+  at: string
+  kind: string
+  title: string
+  detail: string
+  href: string | null
+  state: string
+}
+
+export interface ProjectJourney {
+  project_id: string
+  project_name: string
+  project_status: string
+  generated_at: string
+  stages: JourneyStage[]
+  timeline: JourneyTimelineItem[]
+  warnings: string[]
 }
 
 export interface OrgSettings {

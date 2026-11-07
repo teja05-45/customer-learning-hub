@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Modal, Button } from 'react-bootstrap'
 import { Archive, ArrowLeft, CheckCircle2, Circle, Pencil } from 'lucide-react'
-import { api, toQuery } from '../services/api'
+import { ApiError, api, toQuery } from '../services/api'
 import { useToast } from '../app/ToastProvider'
 import { useSession } from '../app/SessionProvider'
 import type {
@@ -22,11 +22,14 @@ import {
   MetaItem,
   Notice,
   PageHeader,
+  PermissionDenied,
   Pill,
   SectionCard,
   TableSkeleton,
 } from '../components/ui'
+import { ProjectMembers } from '../components/ProjectMembers'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { JourneyBoard } from '../components/JourneyBoard'
 import {
   CONFIDENCE_TONE,
   DECISION_TONE,
@@ -46,7 +49,7 @@ export function ProjectDetailPage() {
   const toast = useToast()
   const queryClient = useQueryClient()
   const { users } = useSession()
-  const [tab, setTab] = useState('questions')
+  const [tab, setTab] = useState('journey')
   const [editing, setEditing] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
 
@@ -163,6 +166,21 @@ export function ProjectDetailPage() {
     )
   }
 
+  if (projectQuery.error instanceof ApiError && projectQuery.error.status === 403) {
+    return (
+      <div className="page">
+        <PageHeader title="Access denied" description="Project access is granted per project, not per workspace." />
+        <PermissionDenied
+          action={
+            <Link to="/projects" className="btn btn-outline-secondary btn-sm">
+              Back to the projects you can access
+            </Link>
+          }
+        />
+      </div>
+    )
+  }
+
   if (projectQuery.error || !project) {
     return (
       <div className="page">
@@ -175,13 +193,19 @@ export function ProjectDetailPage() {
     )
   }
 
+  const role = project.role ?? null
+  const canWrite = role === 'editor' || role === 'project_owner'
+  const canManage = role === 'project_owner'
+
   const tabs = [
+    { key: 'journey', label: 'Learning journey', count: 9 },
     { key: 'questions', label: 'Questions & context', count: project.questions.length },
     { key: 'recruitment', label: 'Recruitment', count: recruitment.data?.total ?? 0 },
     { key: 'interviews', label: 'Interviews', count: interviews.data?.total ?? 0 },
     { key: 'evidence', label: 'Evidence', count: evidence.data?.total ?? 0 },
     { key: 'insights', label: 'Insights', count: insights.data?.total ?? 0 },
     { key: 'decisions', label: 'Decisions', count: decisions.data?.total ?? 0 },
+    { key: 'members', label: 'Members', count: undefined },
   ]
 
   return (
@@ -206,10 +230,19 @@ export function ProjectDetailPage() {
         }
         actions={
           <>
-            <button type="button" className="btn btn-outline-secondary" onClick={() => setEditing(true)}>
-              <Pencil size={13} /> Edit project
-            </button>
-            {project.status !== 'archived' && (
+            {role && (
+              <Pill tone={canManage ? 'green' : canWrite ? 'blue' : 'neutral'}>
+                {role.replace('_', ' ')} access
+              </Pill>
+            )}
+            {canWrite ? (
+              <button type="button" className="btn btn-outline-secondary" onClick={() => setEditing(true)}>
+                <Pencil size={13} /> Edit project
+              </button>
+            ) : (
+              <span className="definition">Read-only access</span>
+            )}
+            {canManage && project.status !== 'archived' && (
               <button type="button" className="btn btn-outline-secondary" onClick={() => setArchiveOpen(true)}>
                 <Archive size={13} /> Archive
               </button>
@@ -229,12 +262,15 @@ export function ProjectDetailPage() {
                   className={`filter-chip${tab === entry.key ? ' active' : ''}`}
                   onClick={() => setTab(entry.key)}
                 >
-                  {entry.label} · {entry.count}
+                  {entry.label}
+                  {typeof entry.count === 'number' && entry.count > 0 ? ` · ${entry.count}` : ''}
                 </button>
               ))}
             </div>
 
             <div className="card-section">
+              {tab === 'journey' && <JourneyBoard projectId={projectId} />}
+
               {tab === 'questions' && (
                 <div className="stack stack-3">
                   <div>
@@ -473,6 +509,8 @@ export function ProjectDetailPage() {
                 </>
               )}
 
+              {tab === 'members' && <ProjectMembers projectId={projectId} canManage={canManage} />}
+
               {tab === 'decisions' && (
                 <>
                   {decisions.isLoading && <LoadingBlock rows={4} />}
@@ -541,15 +579,19 @@ export function ProjectDetailPage() {
 
           <SectionCard title="Quick actions">
             <div className="stack stack-2">
-              <Link to={`/interviews?project=${project.id}`} className="btn btn-outline-secondary btn-sm">
-                Schedule an interview
-              </Link>
+              {canWrite ? (
+                <Link to={`/interviews?project=${project.id}`} className="btn btn-outline-secondary btn-sm">
+                  Schedule an interview
+                </Link>
+              ) : null}
               <Link to={`/evidence?project=${project.id}`} className="btn btn-outline-secondary btn-sm">
                 Review captured evidence
               </Link>
-              <Link to="/recruitment" className="btn btn-outline-secondary btn-sm">
-                Manage recruitment
-              </Link>
+              {canWrite ? (
+                <Link to="/recruitment" className="btn btn-outline-secondary btn-sm">
+                  Manage recruitment
+                </Link>
+              ) : null}
               <Link to={`/decisions?project=${project.id}`} className="btn btn-outline-secondary btn-sm">
                 See linked decisions
               </Link>

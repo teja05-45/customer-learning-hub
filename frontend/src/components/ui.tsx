@@ -32,7 +32,7 @@ export function SectionCard({
   icon?: ReactNode
 }) {
   return (
-    <section className="card-surface">
+    <section className="card-surface" aria-label={typeof title === 'string' ? title : undefined}>
       {(title || actions) && (
         <div className="card-header-row">
           <div>
@@ -263,6 +263,28 @@ export function ProgressBar({ value, tone = 'blue' }: { value: number; tone?: 'b
           borderRadius: 999,
         }}
       />
+    </div>
+  )
+}
+
+/* ------------------------------------------------------- permission states */
+export function PermissionDenied({
+  title = 'You do not have access to this project',
+  description = 'Your account is signed in, but it is not a member of this research project. Ask a project owner or a workspace administrator to grant access.',
+  action,
+}: {
+  title?: string
+  description?: string
+  action?: ReactNode
+}) {
+  return (
+    <div className="empty-state" role="alert">
+      <div className="empty-icon">
+        <ShieldAlert size={18} />
+      </div>
+      <div className="empty-title">{title}</div>
+      <div className="empty-description">{description}</div>
+      {action && <div className="mt-2">{action}</div>}
     </div>
   )
 }

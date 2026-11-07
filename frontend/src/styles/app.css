@@ -1363,6 +1363,177 @@ a:hover {
   font-weight: 620;
 }
 
+/* --------------------------------------------------- journey and outcomes */
+.journey-board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(230px, 1fr);
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  align-items: start;
+}
+
+.journey-column {
+  background: var(--clh-surface-muted);
+  border: 1px solid var(--clh-border);
+  border-radius: var(--clh-radius);
+  min-width: 230px;
+}
+
+.journey-column-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--clh-border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.journey-stage-label {
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.journey-column-body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px;
+}
+
+.journey-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  background: var(--clh-surface);
+  border: 1px solid var(--clh-border);
+  border-radius: var(--clh-radius-sm);
+  color: var(--clh-text);
+  transition: border-color var(--clh-motion-fast) var(--clh-ease), box-shadow var(--clh-motion-fast) var(--clh-ease);
+}
+
+.journey-card:hover {
+  border-color: var(--clh-primary);
+  box-shadow: var(--clh-shadow);
+  text-decoration: none;
+  color: var(--clh-text);
+}
+
+.journey-card.is-overdue {
+  border-color: var(--clh-danger);
+  background: var(--clh-danger-soft);
+}
+
+.journey-code {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  color: var(--clh-text-tertiary);
+}
+
+.journey-card-title {
+  font-size: 12.5px;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
+.journey-card-sub,
+.journey-card-date {
+  font-size: 11px;
+  color: var(--clh-text-secondary);
+  line-height: 1.35;
+}
+
+.journey-card-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--clh-text-tertiary);
+}
+
+.journey-empty {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 6px;
+  font-size: 11.5px;
+  color: var(--clh-text-tertiary);
+}
+
+.journey-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 4px;
+}
+
+.journey-timeline-item {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 9px;
+  padding-bottom: 12px;
+  position: relative;
+}
+
+.journey-timeline-item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 12px;
+  bottom: 0;
+  width: 1px;
+  background: var(--clh-border);
+}
+
+.journey-timeline-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  margin-top: 4px;
+  background: var(--clh-surface);
+  border: 2px solid var(--clh-border-strong);
+  z-index: 1;
+}
+
+.journey-timeline-item.state-upcoming .journey-timeline-dot {
+  border-color: var(--clh-info);
+}
+
+.journey-timeline-item.state-overdue .journey-timeline-dot {
+  border-color: var(--clh-danger);
+  background: var(--clh-danger-soft);
+}
+
+.journey-timeline-body {
+  min-width: 0;
+  padding-bottom: 2px;
+}
+
+.journey-timeline-title {
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+.outcome-measures {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--clh-border);
+}
+
+@media (max-width: 992px) {
+  .outcome-measures {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .outcome-measures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* ---------------------------------------------------------- responsive */
 .mobile-only {
   display: none;

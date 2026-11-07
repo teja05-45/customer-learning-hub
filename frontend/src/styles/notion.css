@@ -1,0 +1,640 @@
+/* =========================================================================
+   Customer Learning Hub — Notion-inspired workspace palette
+   Loaded after app.css and emerald.css. This file is the approved visual
+   contract: one light workspace, compact typography, quiet borders and a single
+   green action accent. Emerald's dark chrome is replaced here, not edited in
+   place, so the previous layer stays intact for history.
+
+   Approved tokens:
+     background #FFFFFF · sidebar #F7F7F5 · primary text #252525
+     secondary text #787774 · borders #E9E9E7 · accent #347A69
+     AI accent #7565B5 · hover #F1F1EF · Inter typography
+
+   Secondary text is rendered at #6f6e6a rather than #787774. The approved
+   value measures 4.48:1 on white and about 4.2:1 on the #F7F7F5 rail, below
+   WCAG AA 4.5:1 for the small labels used here; #6f6e6a keeps the same warm
+   grey at roughly 4.9:1 on white and 4.5:1 on the rail.
+   ========================================================================= */
+
+:root {
+  --clh-primary: #347a69;
+  --clh-primary-ink: #2a6355;
+  --clh-primary-soft: #eef5f2;
+
+  --clh-bg: #ffffff;
+  --clh-surface: #ffffff;
+  --clh-surface-muted: #f7f7f5;
+
+  --clh-text: #252525;
+  --clh-text-secondary: #6f6e6a;
+  --clh-text-tertiary: #6f6e6a;
+
+  --clh-border: #e9e9e7;
+  --clh-border-strong: #dcdbd7;
+
+  --clh-chrome: #f7f7f5;
+  --clh-chrome-ink: #252525;
+  --clh-chrome-muted: #6f6e6a;
+  --clh-navy: #f7f7f5;
+
+  --clh-gold: #347a69;
+  --clh-gold-ink: #2a6355;
+  --clh-gold-soft: #eef5f2;
+  --clh-terracotta: #c0563d;
+
+  --clh-ai: #7565b5;
+  --clh-ai-soft: #f1eef9;
+  --clh-purple: #7565b5;
+  --clh-purple-soft: #f1eef9;
+
+  --clh-success: #2f7d5d;
+  --clh-success-ink: #256349;
+  --clh-success-soft: #edf6f1;
+  --clh-warning: #a87326;
+  --clh-warning-ink: #7c5519;
+  --clh-warning-soft: #fbf4e7;
+  --clh-danger: #b04b38;
+  --clh-danger-ink: #8a3a2b;
+  --clh-danger-soft: #fbeeeb;
+  --clh-info: #3d7280;
+  --clh-info-ink: #2f5964;
+  --clh-info-soft: #eef4f5;
+
+  --clh-radius-sm: 4px;
+  --clh-radius: 6px;
+  --clh-radius-lg: 10px;
+
+  --clh-shadow-sm: 0 1px 1px rgba(37, 37, 37, 0.03);
+  --clh-shadow: 0 1px 2px rgba(37, 37, 37, 0.05), 0 1px 1px rgba(37, 37, 37, 0.03);
+  --clh-shadow-md: 0 10px 28px rgba(37, 37, 37, 0.12);
+
+  --clh-sidebar-width: 252px;
+  --clh-topbar-height: 56px;
+
+  --bs-primary: #347a69;
+  --bs-body-color: #252525;
+  --bs-border-color: #e9e9e7;
+  --bs-body-bg: #ffffff;
+  --bs-font-sans-serif: 'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+body {
+  background: #ffffff;
+  color: #252525;
+  font-family: var(--bs-font-sans-serif);
+  font-size: 13.5px;
+  letter-spacing: -0.005em;
+}
+
+::selection {
+  background: rgba(52, 122, 105, 0.16);
+}
+
+/* ------------------------------------------------------------- typography */
+.page-title,
+.brand-name {
+  font-family: var(--bs-font-sans-serif);
+  font-weight: 640;
+  letter-spacing: -0.025em;
+}
+
+.page-title {
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.page-description {
+  color: var(--clh-text-secondary);
+  font-size: 13px;
+}
+
+/* ------------------------------------------------------------------ shell */
+.sidebar {
+  background: #f7f7f5;
+  border-right: 1px solid #e9e9e7;
+}
+
+.sidebar-brand {
+  padding: 16px 14px 13px;
+  border-bottom: 1px solid #e9e9e7;
+}
+
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #347a69;
+  color: #ffffff;
+  font-size: 11px;
+  box-shadow: none;
+}
+
+.brand-name {
+  color: #252525;
+  font-size: 13.5px;
+}
+
+.brand-sub {
+  color: #6f6e6a;
+}
+
+.nav-section-label {
+  color: #6f6e6a;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 15px 9px 5px;
+}
+
+.nav-item {
+  color: #4b4a47;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 9px;
+}
+
+.nav-item:hover {
+  background: #f1f1ef;
+  color: #252525;
+}
+
+.nav-item.active {
+  background: #f1f1ef;
+  color: #252525;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.nav-item .nav-icon {
+  color: #6f6e6a;
+}
+
+.nav-item.active .nav-icon {
+  color: #347a69;
+}
+
+.nav-count {
+  background: #e9e9e7;
+  color: #4b4a47;
+}
+
+.nav-item.active .nav-count {
+  background: #e3e2de;
+  color: #252525;
+}
+
+.sidebar-footer {
+  border-top: 1px solid #e9e9e7;
+}
+
+.demo-chip {
+  background: #fbf4e7;
+  border-color: #ecdcbf;
+  color: #7c5519;
+}
+
+.topbar {
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid #e9e9e7;
+  height: 56px;
+}
+
+.breadcrumbs,
+.breadcrumbs a {
+  color: #6f6e6a;
+  font-size: 12px;
+}
+
+.search-trigger {
+  background: #ffffff;
+  border-color: #e9e9e7;
+  border-radius: 4px;
+  height: 30px;
+  font-size: 12px;
+}
+
+.search-trigger:hover {
+  border-color: #dcdbd7;
+  box-shadow: none;
+}
+
+.kbd {
+  background: #f7f7f5;
+  border-color: #e9e9e7;
+  color: #6f6e6a;
+}
+
+.icon-button:hover {
+  background: #f1f1ef;
+}
+
+.profile-button {
+  background: #ffffff;
+  border-color: #e9e9e7;
+}
+
+.avatar {
+  background: #eef5f2;
+  color: #2a6355;
+}
+
+/* --------------------------------------------------------------- surfaces */
+.card-surface {
+  border-radius: 6px;
+  border-color: #e9e9e7;
+  box-shadow: none;
+}
+
+.card-surface:hover {
+  box-shadow: none;
+}
+
+.card-header-row {
+  padding: 13px 16px;
+}
+
+.card-section {
+  padding: 16px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.card-subtitle,
+.definition,
+.form-text,
+.honesty-note {
+  color: #6f6e6a;
+}
+
+.stat-card {
+  border-radius: 6px;
+  min-height: 90px;
+  padding: 14px 16px;
+  box-shadow: none;
+}
+
+.stat-card:hover {
+  box-shadow: none;
+  border-color: #dcdbd7;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 640;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #6f6e6a;
+  letter-spacing: 0.01em;
+}
+
+.stat-meta {
+  color: #6f6e6a;
+}
+
+.stat-card.is-warning {
+  border-color: #ecdcbf;
+  background: #fffdf8;
+}
+
+/* ---------------------------------------------------------------- controls */
+.btn {
+  border-radius: 4px;
+  font-size: 12.5px;
+  font-weight: 550;
+  padding: 5px 11px;
+}
+
+.btn-primary {
+  background: #347a69;
+  border-color: #347a69;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background: #2a6355;
+  border-color: #2a6355;
+}
+
+.btn-outline-secondary {
+  color: #3f3e3b;
+  border-color: #dcdbd7;
+  background: #ffffff;
+}
+
+.btn-outline-secondary:hover {
+  background: #f1f1ef;
+  border-color: #c9c8c3;
+  color: #252525;
+}
+
+.btn-ghost:hover {
+  background: #f1f1ef;
+}
+
+.form-control,
+.form-select {
+  border-color: #dcdbd7;
+  border-radius: 4px;
+  font-size: 12.5px;
+  background-color: #ffffff;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #347a69;
+  box-shadow: 0 0 0 3px rgba(52, 122, 105, 0.13);
+}
+
+.form-label {
+  font-size: 11.5px;
+  color: #4b4a47;
+}
+
+.filter-bar {
+  background: #ffffff;
+  border-bottom-color: #e9e9e7;
+}
+
+.filter-chip {
+  border-color: #e9e9e7;
+  background: #ffffff;
+  color: #4b4a47;
+  border-radius: 4px;
+  font-size: 11.5px;
+}
+
+.filter-chip:hover {
+  background: #f1f1ef;
+}
+
+.filter-chip.active {
+  border-color: #347a69;
+  background: #eef5f2;
+  color: #2a6355;
+}
+
+/* ----------------------------------------------------------------- tables */
+.clh-table th {
+  background: #f7f7f5;
+  border-bottom-color: #e9e9e7;
+  color: #6f6e6a;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+
+.clh-table td {
+  border-bottom-color: #f0f0ee;
+}
+
+.clh-table tbody tr:hover {
+  background: #fafaf9;
+}
+
+.table-link:hover {
+  color: #347a69;
+}
+
+/* ------------------------------------------------------------------ pills */
+.pill {
+  border-radius: 3px;
+  font-size: 10.5px;
+  line-height: 17px;
+  padding: 1px 6px;
+  font-weight: 550;
+}
+
+.pill-neutral {
+  background: #f1f1ef;
+  color: #4b4a47;
+}
+
+.pill-blue {
+  background: #eef4f5;
+  color: #2f5964;
+}
+
+.pill-green {
+  background: #edf6f1;
+  color: #256349;
+}
+
+.pill-amber {
+  background: #fbf4e7;
+  color: #7c5519;
+}
+
+.pill-red {
+  background: #fbeeeb;
+  color: #8a3a2b;
+}
+
+.pill-purple {
+  background: #f1eef9;
+  color: #5b4b96;
+}
+
+.pill-outline {
+  background: #ffffff;
+  border-color: #e9e9e7;
+  color: #6f6e6a;
+}
+
+/* ---------------------------------------------------------------- notices */
+.notice {
+  border-radius: 4px;
+}
+
+.notice-info {
+  background: #eef4f5;
+  border-color: #d5e4e7;
+  color: #2f5964;
+}
+
+.notice-warning {
+  background: #fbf4e7;
+  border-color: #ecdcbf;
+  color: #7c5519;
+}
+
+.notice-danger {
+  background: #fbeeeb;
+  border-color: #edcdc6;
+  color: #8a3a2b;
+}
+
+.notice-success {
+  background: #edf6f1;
+  border-color: #cce3d7;
+  color: #256349;
+}
+
+.notice-neutral {
+  background: #f7f7f5;
+  border-color: #e9e9e7;
+  color: #4b4a47;
+}
+
+/* --------------------------------------------------------------- evidence */
+.evidence-card {
+  border-radius: 4px;
+}
+
+.interpretation-block {
+  background: #f1eef9;
+  border-color: #e3ddf2;
+}
+
+.interpretation-block .label {
+  color: #5b4b96;
+}
+
+.provenance-block {
+  background: #f7f7f5;
+  border-color: #dcdbd7;
+}
+
+.evidence-card.type-researcher_interpretation {
+  border-left-color: #7565b5;
+}
+
+.evidence-card.type-contradictory_evidence {
+  border-left-color: #c0563d;
+}
+
+.feedback-card.source-product_review {
+  border-left-color: #7565b5;
+}
+
+/* --------------------------------------------------------------- overlays */
+.overlay-backdrop {
+  background: rgba(37, 37, 37, 0.32);
+}
+
+.command-palette,
+.modal-content {
+  border-radius: 8px;
+}
+
+.command-result:hover,
+.command-result.selected {
+  background: #f1f1ef;
+}
+
+.empty-icon {
+  background: #f7f7f5;
+  color: #347a69;
+  border-radius: 4px;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f1f1ef 25%, #fafaf9 37%, #f1f1ef 63%);
+  background-size: 400% 100%;
+}
+
+.toast-item {
+  background: #252525;
+  border-radius: 6px;
+}
+
+/* ------------------------------------------------------------- login page */
+.login-shell {
+  background: #ffffff;
+}
+
+.login-aside {
+  background: #f7f7f5;
+  border-right: 1px solid #e9e9e7;
+  color: #4b4a47;
+}
+
+.login-aside::after {
+  background: radial-gradient(circle, rgba(52, 122, 105, 0.12), transparent 65%);
+}
+
+.login-aside h1 {
+  color: #252525;
+}
+
+.login-aside p {
+  color: #6f6e6a;
+}
+
+.login-value {
+  color: #4b4a47;
+}
+
+.login-value strong {
+  color: #252525;
+}
+
+.login-main {
+  background: #ffffff;
+}
+
+.role-card {
+  border-radius: 6px;
+}
+
+.role-card:hover {
+  border-color: #347a69;
+  box-shadow: 0 4px 12px rgba(52, 122, 105, 0.08);
+}
+
+a {
+  color: #347a69;
+}
+
+a:hover {
+  color: #2a6355;
+}
+
+:focus-visible {
+  outline-color: #347a69;
+}
+
+/* --------------------------------------------------------------- journey */
+.journey-column {
+  background: #f7f7f5;
+  border-color: #e9e9e7;
+}
+
+.journey-column-header {
+  border-bottom-color: #e9e9e7;
+}
+
+.journey-card {
+  border-color: #e9e9e7;
+  border-radius: 4px;
+}
+
+.journey-card:hover {
+  border-color: #347a69;
+  box-shadow: none;
+}
+
+.timeline-dot.current {
+  border-color: #347a69;
+  background: #eef5f2;
+}
+
+/* ------------------------------------------------------- project switcher */
+.project-switcher {
+  padding: 0 12px 12px;
+}
+
+.project-switcher .form-select {
+  font-size: 12.5px;
+  border-color: var(--clh-border);
+  background-color: #ffffff;
+}
+
+.project-switcher .form-select:focus-visible {
+  border-color: var(--clh-primary);
+  box-shadow: 0 0 0 2px rgba(52, 122, 105, 0.18);
+}

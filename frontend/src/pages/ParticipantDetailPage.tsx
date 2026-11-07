@@ -155,6 +155,7 @@ export function ParticipantDetailPage() {
                       <th>Status</th>
                       <th>Scheduled</th>
                       <th>Evidence</th>
+                      <th>Insights</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -179,10 +180,55 @@ export function ParticipantDetailPage() {
                         </td>
                         <td>{formatDateTime(item.scheduled_at)}</td>
                         <td className="mono">{item.evidence_count}</td>
+                        <td className="mono">{item.insight_count}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Feedback history"
+            subtitle="Every source this person contributed to, across projects and channels"
+            actions={<Pill tone="outline">{data.feedback_history.length} source(s)</Pill>}
+          >
+            {data.feedback_history.length === 0 ? (
+              <EmptyState
+                title="No feedback on file"
+                description="Written feedback, survey answers, support notes and imported sources appear here when they are attributed to this participant."
+              />
+            ) : (
+              <div className="stack stack-2">
+                {data.feedback_history.map((item) => (
+                  <article key={item.id} className="feedback-card">
+                    <div className="row-between" style={{ flexWrap: 'wrap', gap: 6 }}>
+                      <div className="d-flex gap-2 align-items-center flex-wrap">
+                        <span className="mono" style={{ fontSize: 11 }}>{item.code}</span>
+                        <Pill tone="outline">{titleCase(item.source_type)}</Pill>
+                        <Pill tone={item.verification_status === 'verified' ? 'green' : 'amber'}>
+                          {titleCase(item.verification_status)}
+                        </Pill>
+                        <Pill tone="blue">{titleCase(item.research_depth)} depth</Pill>
+                      </div>
+                      <span className="definition">{formatDate(item.collected_at)}</span>
+                    </div>
+                    <blockquote className="feedback-quote">{item.content}</blockquote>
+                    {item.interpretation && (
+                      <div className="interpretation-block">
+                        <span className="label">Researcher interpretation</span>
+                        {item.interpretation}
+                      </div>
+                    )}
+                    <div className="feedback-source-line">
+                      <Link to={`/projects/${item.project_id}`}>{item.project_name}</Link>
+                      {item.interview_id && item.interview_code && (
+                        <Link to={`/interviews/${item.interview_id}`}>{item.interview_code}</Link>
+                      )}
+                    </div>
+                  </article>
+                ))}
               </div>
             )}
           </SectionCard>
