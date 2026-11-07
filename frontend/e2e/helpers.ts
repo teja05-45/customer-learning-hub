@@ -22,6 +22,15 @@ export async function resetDemoData(request: Request): Promise<void> {
   expect(logout.ok(), 'sign-out after reset failed').toBeTruthy()
 }
 
+/** Sign the API request context in as a demonstration role (separate cookie jar). */
+export async function signInApi(request: Request, role: string): Promise<void> {
+  const session = await (await request.get(`${API_URL}/session`)).json()
+  const user = session.users.find((candidate: { role: string }) => candidate.role === role)
+  expect(user, `no demonstration user with role ${role}`).toBeTruthy()
+  const login = await request.post(`${API_URL}/auth/demo`, { data: { user_id: user.id } })
+  expect(login.ok(), `API sign-in as ${role} failed: ${login.status()}`).toBeTruthy()
+}
+
 /** Sign in through the demonstration entry. This creates a real session. */
 export async function enterAs(page: Page, name: string): Promise<void> {
   await page.goto('/')

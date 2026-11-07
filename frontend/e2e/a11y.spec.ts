@@ -19,6 +19,7 @@ const SCREENS = [
   { path: '/insights', name: 'Insights' },
   { path: '/decisions', name: 'Decisions' },
   { path: '/actions', name: 'Actions' },
+  { path: '/outcomes', name: 'Outcome measurement' },
   { path: '/analytics', name: 'Analytics' },
   { path: '/settings', name: 'Settings' },
 ]

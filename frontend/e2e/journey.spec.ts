@@ -49,6 +49,15 @@ test('a complete research-to-decision journey is visible and editable in the UI'
   expect(projectResponse.status()).toBe(201)
   const project = await projectResponse.json()
 
+  // Project access is an explicit grant. The researcher owns the new study, so
+  // they add the business owner who will record the decision; workspace role
+  // alone is no longer enough to write inside a project.
+  const grantResponse = await request.post(`${API_URL}/projects/${project.id}/members`, {
+    headers: asResearcher,
+    data: { user_id: owner.id, role: 'editor' },
+  })
+  expect(grantResponse.status(), 'business owner membership grant').toBe(201)
+
   // 2-3. Synthetic participant and recruitment record.
   const participantResponse = await request.post(`${API_URL}/participants`, {
     headers: asResearcher,
