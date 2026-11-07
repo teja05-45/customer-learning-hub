@@ -1,5 +1,11 @@
 # Independent FDE Evaluation
 
+> **Superseded 6 November 2026.** This report describes an earlier pass (108 backend tests, 20
+> browser tests, Executive Emerald). The final audit found that the claimed Notion-style redesign
+> had never been implemented and that outcome measurement, profile feedback history, journey views
+> and consent-withdrawal consequences were missing. See `docs/final-recruiter-evaluation.md`,
+> `docs/final-delivery-report.md` and `docs/bug-fix-register.md` for the current assessment.
+
 This is a **simulated evaluator assessment**, written by the same engineer who
 implemented the change but deliberately switching role and looking for reasons to
 reject. It is not a prediction of any real recruiter's decision, and no real

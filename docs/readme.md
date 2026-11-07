@@ -37,7 +37,13 @@ first build and is retained for context; where they disagree, the canonical set 
 | [requirements_traceability](requirements_traceability.md) | Requirement → UI → API → data → test |
 | [git_commit_plan](git_commit_plan.md) | Intended units and commit rules |
 | [DEFECT_REGISTER](DEFECT_REGISTER.md) | Confirmed defects and gaps |
-| [STAGE_COMPLETION_REPORT](STAGE_COMPLETION_REPORT.md) | Delivery report |
+| [final-qa-baseline](final-qa-baseline.md) | Measured starting point and claim discrepancies |
+| [workflow-validation-matrix](workflow-validation-matrix.md) | Every workflow with UI, API, data, permissions and evidence |
+| [page-by-page-qa](page-by-page-qa.md) | Every route, interaction, defect and screenshot |
+| [bug-fix-register](bug-fix-register.md) | Reproductions, root causes, fixes and open P0s |
+| [final-delivery-report](final-delivery-report.md) | Current delivery record and actual results |
+| [final-recruiter-evaluation](final-recruiter-evaluation.md) | Independent scorecard and recommendation |
+| [STAGE_COMPLETION_REPORT](STAGE_COMPLETION_REPORT.md) | Historical delivery report |
 
 ## Original discovery set
 
@@ -51,8 +57,9 @@ Treat `auth.md`, `security.md` and `acceptance_criteria.md` as authoritative.
 2. `prd.md` — why it exists.
 3. `architecture.md` then `hld.md` — how it is built.
 4. `auth.md` and `security.md` — who may do what, and what is still missing.
-5. `acceptance_criteria.md` and `testing.md` — what was actually verified.
-6. `09-demo-script.md` — follow along with the app open.
+5. `acceptance_criteria.md`, `testing.md` and `final-qa-baseline.md` — what was actually verified, and what the starting point really was.
+6. `workflow-validation-matrix.md` and `bug-fix-register.md` — end-to-end status and remaining P0s.
+7. `09-demo-script.md` — follow along with the app open.
 
 ## Maintaining this set
 

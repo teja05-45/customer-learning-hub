@@ -1,6 +1,13 @@
 # Customer Learning Hub — Master Design System
 
-**Direction:** Executive Emerald
+> **Current implementation (final QA pass):** the approved Notion-inspired palette is implemented in
+> `frontend/src/styles/notion.css`, loaded after `emerald.css`. Tokens: `#FFFFFF` background,
+> `#F7F7F5` sidebar, `#252525` text, `#6F6E6A` secondary text (darkened from `#787774` for AA),
+> `#E9E9E7` borders, `#347A69` primary, `#7565B5` AI accent, `#F1F1EF` hover, Inter typography.
+> The Executive Emerald material below is retained as the historical design layer that the current
+> sheet overrides; where the two conflict, `notion.css` and `docs/design.md` win.
+
+**Historical direction:** Executive Emerald
 **Product:** Customer Learning Hub (Everyday Goods)
 **Industry:** Enterprise SaaS · Customer research · Business intelligence
 **Audience:** CEO, researchers, business owners, customer-experience teams

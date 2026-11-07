@@ -1,6 +1,9 @@
 # Defect Register
 
-> **Status (2 November 2026).** This document is retained as the original discovery record.
+> **Status (6 November 2026).** The current, executed defect record is
+> [bug-fix-register.md](bug-fix-register.md). This file is retained as the original discovery record.
+>
+> **Original status (2 November 2026).** This document is retained as the original discovery record.
 > Password authentication, server-side sessions and API-enforced roles are now implemented;
 > statements below that the API has no authentication, or that `X-Demo-User-Id` grants
 > identity, no longer describe the code. See [auth.md](auth.md) and [security.md](security.md).

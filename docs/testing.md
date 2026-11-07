@@ -39,22 +39,22 @@ The Playwright suite expects the API at `http://127.0.0.1:8000/api/v1` (override
 
 ## Actual results
 
-Executed on 3 November 2026 against the working tree of this release:
+Re-run on 6 November 2026 after the final QA fixes:
 
 ```
 cd backend && python -m pytest -q
-108 passed, 1 warning in 73.91s
+122 passed, 1 warning in ~150s
 ```
 
 The warning is a third-party Starlette/anyio deprecation notice, not a project failure.
 
 ```
 cd frontend && npm run typecheck     # exit 0, no output
-cd frontend && npm run build         # exit 0, built in 5.70s
+cd frontend && npm run build         # exit 0, built in 10.64s
 ```
 
-`vite build` reports one chunk-size advisory (single ~1 MB bundle). Code-splitting is a listed
-improvement, not a failure.
+`vite build` no longer reports a chunk-size advisory: the entry is 261.65 kB (81.70 kB gzip) and
+the largest chunk is Recharts' categorical chart module at 382.81 kB (105.76 kB gzip).
 
 ### Test isolation
 
@@ -72,34 +72,29 @@ cookie round-trips through Starlette's `TestClient`.
 - `tsc --noEmit` — clean.
 - `vite build` — succeeds with one chunk-size advisory (single ~1 MB bundle).
 - Playwright specs: `smoke.spec.ts` (primary screens, deep links, unknown route, API failure
-  state, skip link, command palette), `a11y.spec.ts` (axe scan of every primary screen, plus the
-  insight page, evidence page and add-evidence dialog),
-  `journey.spec.ts` (research-to-decision workflow), `exports.spec.ts` (all nine entity Settings
-  downloads parsed as CSV), `traceability.spec.ts` (survey → evidence → insight; evidence ↔ insight
-  ↔ decision; cross-project and role refusal; export and audited removal at four widths;
+  state, skip link, command palette), `a11y.spec.ts` (axe scan of 13 primary screens, plus the
+  traceability screens and add-evidence dialog),
+  `journey.spec.ts` (research-to-decision workflow), `exports.spec.ts` (all Settings downloads
+  parsed as CSV), `traceability.spec.ts` (survey → evidence → insight; evidence ↔ insight ↔
+  decision; cross-project link and role refusal; export and audited removal at four widths;
   context-only insight), `feedback.spec.ts` (record → verify → delete), `responsive.spec.ts`
-  (375/768/1024/1440 plus the auth screen), `screenshots.spec.ts` (documentation captures).
+  (375/768/1024/1440 plus the auth screen), `workflows.spec.ts` (journey board/timeline, profile
+  feedback history, outcome lifecycle, consent withdrawal), `screenshots.spec.ts` (documentation
+  captures).
 
 ```
-cd frontend && npx playwright test
-20 passed (1.9m)
+cd frontend && E2E_BASE_URL=http://localhost:8081 npx playwright test
+24 passed (2.6m)
 ```
 
 The traceability export is verified twice: in `test_traceability.py` (headers, provenance,
 classification, statement integrity, no duplicate pairs) and in `traceability.spec.ts`, which
 downloads the file through the Settings button, parses it and checks the statement and rationale.
 
-Against the Docker build (`E2E_BASE_URL=http://localhost:8081`), the smoke and traceability specs
-were also executed:
-
-```
-npx playwright test e2e/smoke.spec.ts e2e/traceability.spec.ts
-8 passed (27.5s)
-```
-
-Both servers were running for that run: FastAPI on `127.0.0.1:8000` and Vite on
-`localhost:5173`. The API was started with `DEMO_MODE=true` because the browser helpers use the
-demonstration entry; production defaults remain demo-off.
+The full suite above was executed against the Docker production build on `http://localhost:8081`,
+with the API in the same Compose stack. Earlier in the pass the same 20 pre-existing tests passed
+against the dev servers. The API was started with `DEMO_MODE=true` because the browser helpers use
+the demonstration entry; production defaults remain demo-off.
 
 ### Isolated API contexts
 
@@ -110,10 +105,11 @@ request. Neither a header nor a cross-host cookie is treated as authentication.
 
 ### Redesign verification
 
-The Executive Emerald redesign was checked by `responsive.spec.ts` at four widths, by axe on every
-primary screen (no serious or critical violations) and by regenerating all screenshots. The first
-axe run caught a real contrast failure in the sidebar section labels; the token was lightened to
-`#B9CDC2` (≈6:1 on the chrome) and the suite was rerun green.
+The approved Notion-style palette was checked by `responsive.spec.ts` at four widths, by axe on every
+primary screen (no serious or critical violations) and by regenerating all screenshots from the
+Docker build. The first axe run caught real contrast failures on the light rail; the secondary text
+token was darkened from `#787774` to `#6f6e6a` and the suite was rerun green. The journey board and
+outcome screen are included in the run; the previous 1 MB entry chunk is now split per route.
 
 ## What is deliberately not covered
 

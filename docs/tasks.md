@@ -32,11 +32,11 @@ Status as delivered. "Verified" means covered by an executed check, not merely w
 | Feedback | Explicit collection-depth labels, unattributed records, source-reference gate before verification | `test_survey_feedback_is_labelled_as_limited_depth`, `test_verified_source_requires_a_reference`, `test_unattributed_feedback_is_allowed_and_labelled` |
 | Feedback | Feedback page with filtering, edit, verify and audited delete | `feedback.spec.ts` |
 | Exports | Feedback sources added as a ninth CSV export | `exports.spec.ts`, `test_every_export_downloads` |
-| UX | Executive Emerald redesign across all screens and both entry/navigation shells | `docs/design.md`, regenerated screenshots, axe |
+| UX | Approved Notion-style palette across all screens and both entry/navigation shells (the earlier Executive Emerald layer is overridden by `notion.css`) | `docs/design.md`, regenerated screenshots, axe |
 | UX | Responsive layout verified at 375/768/1024/1440 plus the auth screen | `responsive.spec.ts` |
 | Exports | All eight Settings downloads exercised in a browser and parsed | `exports.spec.ts` |
 | Delivery | Docker images, Compose stack, health checks, volume | Compose verification |
-| Delivery | 91 backend tests, 14 browser tests, clean typecheck/build | Final verification run |
+| Delivery | 122 backend tests, 24 browser tests, clean typecheck/build, Docker persistence | Final verification run |
 | Docs | Product, architecture, data, API, security, operations, plan, defects | This documentation set |
 
 ## Remaining (prioritised)

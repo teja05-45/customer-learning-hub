@@ -2,6 +2,87 @@
 
 Format: what changed and why it matters. No claim is made for a change that was not executed.
 
+## 1.8.0 — Project-level authorization
+
+### Added
+
+- `ProjectMembership` and `ProjectRole` (`viewer < editor < project_owner`), with migration
+  `d4e8f1a2c7b9` and a least-privilege backfill (owners, active admins, demonstrable contributors).
+- Central authorization service (`backend/app/services/access.py`): project read/write/manage checks,
+  visible-project resolution, participant scoping and entity→project resolvers.
+- Membership API: list, grant, change role and revoke, with last-owner protection. Project creation
+  grants the creator `project_owner`; reassigning an owner grants the new owner too.
+- Scoping of project lists, dashboard, analytics, search, exports and every nested record. Orphan
+  decisions/insights are owner/admin-only until attached to a project.
+- Frontend `ProjectProvider`, sidebar project switcher with access label, role pill, read-only state,
+  access-denied page and a Members tab for project owners. "New project" is limited to
+  researcher/admin.
+- `backend/tests/test_project_authorization.py` — 16 adversarial HTTP tests.
+
+### Fixed
+
+- A researcher could `PATCH /settings`; workspace settings and user administration are now admin-only.
+- A business owner could not add a project member because the middleware prefix list omitted the
+  nested members route; all signed-in roles now pass the middleware gate while
+  `assert_project_manage` remains authoritative.
+- A demo-reset regression from narrowing `/settings` and `/demo` together; `/demo` remains available
+  to researcher/admin, `/settings` is admin-only.
+
+### Verified
+
+- **138 backend tests passed** (1 deprecation warning, 0 failed/skipped, 274.31 s).
+- TypeScript clean; production build clean (entry 264.31 kB, 82.45 kB gzip).
+- **24 Playwright tests passed** against the live API + Vite stack (3.6 min).
+- Migration fresh upgrade → downgrade → upgrade passed; backfill on a copy of seeded QA data produced
+  15 memberships (10 owner, 5 editor) with no admin or owner left without access; copy deleted.
+
+### Known open
+
+- Workspace admins are implicit owners of every project; this is not tenant isolation.
+- Leading-wildcard search is unindexed at scale; measured and documented.
+- Membership role changes/removals are not audited (adds are).
+
+
+## 1.7.0 — Final QA: consent, outcomes, journey and the real palette
+
+### Added
+
+- Consent withdrawal now has consequences: future sessions are cancelled, re-booking is refused,
+  the participant's contact consent is updated, and interview plus participant audit events are
+  written. Prior evidence and feedback are retained and the consent history stays append-only.
+- Outcome measurement: `Outcome` model, schemas, endpoints, migration `c8e3a1d5f204`, seed data,
+  `/outcomes` screen, nav entry, project-journey column and server-derived status rules. A measured
+  status without an actual result is rejected; a result without a target is `inconclusive`.
+- Participant profile feedback history with real relationships, plus per-interview insight counts
+  derived from evidence links.
+- `GET /projects/{id}/journey` and a Board/Timeline view on project detail. Nine stages are derived
+  from records; cards link to those records. There is no decorative drag-and-drop.
+- `frontend/src/styles/notion.css` implements the approved white/`#F7F7F5` palette, Inter typography,
+  `#347A69` actions and `#7565B5` interpretation surfaces. Emerald remains as an overridden
+  historical layer.
+- Route-level code splitting for every screen except the shell/dashboard.
+- `workflows.spec.ts` and backend tests for consent withdrawal, outcomes and the journey; screenshot
+  set expanded to 27 images, including mobile and tablet.
+
+### Fixed
+
+- Seeded outcome windows were reversed, so every result update failed with HTTP 400. Seed dates are
+  now chronological and a regression test asserts it.
+- Past journey milestones were hard-coded as `upcoming`; status is now derived against today.
+- Section cards were unnamed for assistive technology; they now expose an accessible name.
+- The approved palette's secondary text failed AA on the light rail; the text token is `#6f6e6a`
+  (documented deviation), and axe is green again.
+
+### Verified
+
+- 122 backend tests, clean typecheck, clean production build, 24 Playwright tests against the Docker
+  build, axe on 13 primary screens, four responsive widths, Docker persistence across restart.
+
+### Known open
+
+- Project-level authorization remains workspace-wide (P0).
+- Leading-wildcard search is unindexed at scale; measured and documented.
+
 ## 1.6.0 — Evidence traceability
 
 ### Added

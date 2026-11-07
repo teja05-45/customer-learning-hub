@@ -1,266 +1,271 @@
-# Final Delivery Report
+# Final delivery report
 
-Date: 3 November 2026
-Repository: Customer Learning Hub — Everyday Goods
-Change: evidence-to-insight traceability
+Audit date: 6 November 2026 · Branch: `main` · Base commit: `6bfbe62` · Commits made in this pass:
+**none** (the working tree is intentionally left dirty for review).
 
 ## 1. Executive summary
 
-The application already recorded feedback, evidence, insights, decisions and
-actions, but the chain was broken in two places: evidence could only be created
-from an interview, and an evidence-to-insight link could only be "supporting" or
-"contradictory", with no author, reason or confidence. Customers who answered a
-survey could never reach an insight.
+> **Release addendum (7 November 2026):** this report describes the first audit pass. The unresolved
+> P0 it records — project-level authorization — has since been implemented, migrated, tested and
+> documented. The authoritative release report is now
+> [`final-submission-audit.md`](final-submission-audit.md). Where the two differ, the audit wins.
 
-That is now fixed. Evidence can be derived from any feedback source with the
-customer's words copied verbatim. Each insight-evidence relationship carries its
-own classification (supporting / contradictory / contextual), a rationale, an
-optional confidence judgement, tags and an author. Researchers can navigate in both
-directions, read the decision chain back to the original words, and export the whole
-chain. Verification uncovered three defects that would have broken a real upgrade;
-all three were fixed and covered by tests.
+This pass independently re-tested the Customer Learning Hub and corrected several claims that did not
+survive inspection. The repository did **not** contain the described Notion-style redesign, did not
+have 120 backend tests, and could not run Playwright until Chromium was installed. It also lacked
+outcome measurement, profile feedback history, journey views and any consequence for consent
+withdrawal.
+
+Those gaps were implemented or explicitly documented. The result is a coherent research system with a
+verified end-to-end chain, honest labels and a measured set of remaining limits. Project-level
+authorization was still missing at the end of this first pass; it is now implemented — see the
+addendum above and `authorization-and-permissions.md`.
+
+Final state:
 
 | Check | Result |
 | --- | --- |
-| Backend tests | **108 passed** |
+| Backend | **122 passed**, 0 failed, 0 skipped |
 | TypeScript | clean |
-| Vite build | clean (one bundle-size advisory) |
-| Playwright (dev servers) | **20 passed** |
-| Playwright (Docker, smoke + traceability) | **8 passed** |
-| Docker Compose | both services built; API healthy; web 200; `seeded: true` |
+| Production build | clean; entry 261.65 kB (81.70 kB gzip), largest chunk 382.81 kB |
+| Playwright | **24 passed** against the Docker build |
+| Axe | 13 primary screens + dialogs, 0 serious/critical |
+| Responsive | 375 / 768 / 1024 / 1440 px, no page overflow |
+| Docker Compose | built, both containers healthy, persistence verified |
+| Hosted deployment | not performed, not claimed |
 
-## 2. Original business problem
+## 2. Baseline
 
-Everyday Goods could not reliably answer "what did customers actually tell us, and
-what did we do about it?". Research lived in interviews; most customers never
-attend one. Findings were asserted without a defensible link to the words behind
-them, and inconvenient feedback could quietly disappear.
+At the start: branch `main`, clean tree, **108** backend tests, clean typecheck, successful build with a
+1,011.67 kB entry chunk, no Docker images/volumes, and 20 Playwright failures caused only by a missing
+Chromium binary. No commit implemented the claimed palette. Full command output and the discrepancy
+list are in `docs/final-qa-baseline.md`.
 
-## 3. Existing functionality discovered (audit)
+## 3. Business workflow validation
 
-- Server-side sessions and role enforcement in middleware.
-- Projects, participants, recruitment, interviews, consent.
-- Eight feedback source types with depth labels and separated interpretation.
-- Evidence with five types and provenance status.
-- Insights, decisions, actions, dashboards, analytics, search.
-- Nine CSV exports, 91 backend tests, 14 Playwright tests.
-- An `insight_evidence` association already existed with a unique pair constraint
-  and two roles — the right shape to extend.
-
-Full detail: `docs/traceability-audit.md`.
-
-## 4. New functionality implemented
-
-- Evidence derivation from any feedback source (`POST /feedback/{id}/evidence`).
-- Provenance snapshot on evidence: source type, method, depth, reference,
-  verification state, collection date, plus `feedback_record_id`.
-- Third classification `contextual`; rationale, confidence, tags, author and
-  `updated_at` on the relationship.
-- `PATCH` / `DELETE` on a relationship; unlink is audited.
-- Grouped reads: insight → evidence, evidence → insights, insight traceability,
-  decision traceability.
-- Traceability CSV export.
-- UI: grouped evidence with provenance, quality counts, unsubstantiated state,
-  add-evidence and edit-relationship flows, reverse view, decision chain.
-
-## 5. Architecture changes
-
-- No new entity was introduced. `InsightEvidence` was extended; `Evidence` gained
-  a nullable feedback link and a provenance snapshot.
-- Serializers own the derived traceability shapes; routers stay thin. New schemas
-  live in `app/schemas/traceability.py`.
-- Provenance for interview evidence is derived from the live interview; provenance
-  for feedback-derived evidence is a stored snapshot so later corrections cannot
-  silently rewrite how the words are presented.
-
-## 6. Database changes
-
-- `evidence`: `feedback_record_id` (FK `SET NULL`), `source_type`,
-  `collection_method`, `research_depth`, `source_reference`, `verification_state`,
-  `collected_at`; index on `feedback_record_id`.
-- `insight_evidence`: `rationale`, `confidence`, `tags`, `created_by_id` (FK
-  `SET NULL`), `updated_at`; index `(insight_id, role)`.
-- Alembic revision `b7d2f4a91c03`, tested upgrade → downgrade → upgrade with data.
-- Existing non-Alembic databases gain the columns through
-  `ensure_sqlite_columns()`, tested by `test_schema_upgrade.py`.
-
-## 7. API changes
-
-New or extended: `POST/GET /feedback/{id}/evidence`,
-`GET /insights/{id}/evidence`, `PATCH/DELETE /insights/{id}/evidence/{relationship}`,
-`GET /evidence/{id}/insights`, `GET /insights/{id}/traceability`,
-`GET /decisions/{id}/traceability`, `GET /exports/traceability.csv`.
-`POST /insights/{id}/evidence` keeps its `InsightDetail` response for compatibility
-and now accepts classification, rationale, confidence and tags.
-See `docs/api.md` and `docs/evidence-traceability.md`.
-
-## 8. UI/UX changes
-
-- Insight page: three separated evidence groups, provenance per item, quality
-  indicators, conflict warning, explicit "unsubstantiated" state.
-- Add-evidence dialog: search, source-type and verification filters, statement
-  preview, multi-select, classification, required rationale, optional confidence
-  and tags.
-- Edit-relationship dialog: re-classification without touching the quote.
-- Evidence page: every insight that uses the item, grouped, with reason and author.
-- Decision page: reasoning chain back to customer statements, contradictions and
-  gaps.
-- Feedback page: **Create evidence** action.
-- Settings: **Evidence traceability** export.
-- Executive Emerald used throughout; no new visual language.
-
-## 9. Security and authorization
-
-- Authentication unchanged: server-side sessions, HTTP-only cookie, PBKDF2.
-- Every new write goes through the existing middleware policy (researcher/admin for
-  feedback/evidence/insights) and is covered by a test that verifies a CX user gets
-  `403` and an anonymous request `401`.
-- Cross-project linking is refused server-side with `400`; the frontend filter is
-  convenience only.
-- No secrets introduced; no contact fields added; export includes no email or notes.
-- Frontend input validation is mirrored on the server; it is not the boundary.
-
-## 10. Test results (executed)
+The full chain was mapped and exercised:
 
 ```
-cd backend && python -m pytest -q
-108 passed in 73.91s
-
-cd frontend && npm run typecheck
-exit 0
-
-cd frontend && npm run build
-exit 0, built in 6.52s (one chunk-size advisory: 1,011.67 kB)
-
-cd frontend && npx playwright test
-20 passed (1.9m)
+Project → Customer discovery → Recruitment → Consent → Session / async feedback
+→ Evidence → Insights → Decisions → Actions → Outcome measurement
 ```
 
-New backend suites: `test_traceability.py` (15), `test_migrations.py` (1),
-`test_schema_upgrade.py` (1). The migration suite runs Alembic against a real file.
+Every stage is verified through API tests and/or Playwright, including project-level isolation after
+the release addendum. Details,
+including the exact database records and permission rules, are in
+`docs/workflow-validation-matrix.md`.
 
-## 11. Accessibility results
+## 4. Page-by-page audit
 
-`frontend/e2e/a11y.spec.ts` ran axe (WCAG 2.0/2.1 A and AA) on all twelve primary
-screens, the insight detail page, the evidence detail page and the open
-add-evidence dialog. Zero serious or critical violations. Keyboard-only navigation
-and the skip link are covered by `smoke.spec.ts`.
+All 22 registered routes were inspected. There is no Customers or Reports route; participants are the
+customer directory and Analytics/Settings provide reporting. One coverage gap remains: `/projects/new`
+was verified through the API but not driven end-to-end through its form. Full table and per-page notes:
+`docs/page-by-page-qa.md`.
 
-## 12. Responsive verification
+## 5. Defects discovered
 
-`responsive.spec.ts` passed at 375, 768, 1024 and 1440 for the primary screens.
-The new test additionally loads a real insight and checks all four widths for
-horizontal overflow. No overflow was observed.
-
-## 13. Export verification
-
-Ten exports: the nine existing entities (unchanged and still passing) plus
-`traceability.csv`. Verified in the API (headers, BOM, provenance, classification,
-rationale, statement integrity, no duplicate insight/evidence pairs, synthetic
-origin) and in the browser (download, parse, statement and rationale present). The
-download is written to the audit trail.
-
-## 14. Docker verification
-
-`docker compose up -d --build` built both images; `clh-api` reported healthy;
-`GET /api/v1/health` returned `status: ok`, `seeded: true`; the web app returned
-200 at `http://localhost:8081`; `E2E_BASE_URL=http://localhost:8081` ran the smoke
-and traceability specs — 8 passed.
-
-The run also exercised a **pre-existing volume** from an earlier schema. Without
-the compatibility guard the API failed on the first insert; with it, the volume was
-upgraded in place and reseeded.
-
-## 15. Deployment verification
-
-Locally verified with Docker Compose. **No public/hosted deployment was performed**,
-so no production-readiness claim is made. TLS, managed PostgreSQL, backups and an
-identity provider remain deployment work, not delivered here.
-
-## 16. Documentation updates
-
-- `docs/traceability-audit.md` — audit performed before the change.
-- `docs/evidence-traceability.md` — model, lifecycle, API, UI, export, coverage.
-- `docs/evaluator-report.md` — independent scorecard and adversarial review.
-- `docs/final-delivery-report.md` — this document.
-- Updated: `README.md`, `docs/api.md`, `docs/database.md`, `docs/changelog.md`,
-  `docs/testing.md`.
-- Historical discovery documents (`docs/01-…` to `docs/20-…`) were left as dated
-  records; some quote the previous test counts.
-
-## 17. Git commits
-
-Ten commits, each a single-line conventional subject with no body and no generated
-attribution. See `git log --oneline` for hashes:
-`feat(backend): add evidence insight relationships`,
-`feat(api): expose insight traceability endpoints`,
-`feat(exports): include evidence traceability`,
-`fix(backend): seed demo data on startup`,
-`fix(backend): upgrade existing volumes on start`,
-`test(backend): validate evidence relationship integrity`,
-`feat(ui): add supporting and contradictory evidence`,
-`test(e2e): verify complete evidence traceability journey`,
-`docs: document evidence traceability architecture`,
-`docs: add independent evaluator and delivery reports`.
-
-## 18. Screenshots
-
-The Playwright screenshot spec regenerated `docs/screenshots/` during the full run.
-`11-insight-traceability.png` now shows the grouped evidence section, and
-`02-overview.png` is referenced at the top of the README. Screenshots were captured
-only after data loaded.
-
-## 19. Known limitations
-
-- **AI assistance is not implemented.** The repository has no provider abstraction
-  and no Groq/Gemini client; adding one would have introduced an unrequested paid
-  dependency. The deterministic workflow is complete.
-- No SSO, email password reset or self-service customer submission.
-- SQLite is the Compose database (single writer); PostgreSQL is the intended
-  production engine and was not available to execute the migration against.
-- Some lists load all rows; the add-evidence picker filters source type and
-  verification client-side.
-- Evidence deletion is permanent (audited, no tombstone).
-- Authorization is workspace-wide: any researcher may edit any project.
-- No CI configuration; no load, penetration or visual-regression testing.
-- Bundle size advisory (~1 MB single chunk).
-- Unlinking uses the native browser confirm rather than the product dialog.
-
-## 20. Remaining risks
-
-| Risk | Impact | Mitigation |
+| ID | Severity | Defect |
 | --- | --- | --- |
-| A future migration rebuilds a cascading parent | Silent link loss | The current migration guards it and the test asserts row survival; the same pattern must be reused |
-| Provenance snapshot vs live source drift | A reader may see stale depth/verification | Snapshot is deliberate; a drift badge is not implemented |
-| Classification is Pydantic-only | A raw SQL write could store an invalid value | All product writes go through the API; a DB `CHECK` is future work |
-| Coarse roles | Over-broad edit rights inside one workspace | Acceptable single-tenant; per-project membership is future work |
-| Documentation drift in older docs | Reviewer confusion | Current docs updated; historical set is date-stamped |
+| QA-01 | Critical | Consent withdrawal had no consequences |
+| QA-02 | High | Outcome measurement did not exist |
+| QA-03 | High | Profile omitted feedback history |
+| QA-04 | High | Journey board and timeline missing |
+| QA-05 | High | Approved palette never implemented |
+| QA-06 | High | Reversed seed outcome windows blocked result recording |
+| QA-07 | Medium | Past timeline milestones labelled "Upcoming" |
+| QA-08 | Medium | 1 MB entry chunk |
+| QA-09 | Medium | Landmark/contrast issues after theme change |
+| QA-10 | Critical | No project-level authorization — **fixed in the release pass** |
+| QA-11 | Low | Leading-wildcard search unindexed (open) |
 
-## 21. Hiring evaluator scorecard
+## 6. Defects fixed
 
-Reference: `docs/evaluator-report.md`. Weighted score **82/100**;
-recommendation **Recommend selection** (not "strongly"); AI and deployment are the
-drag, provenance and ownership are the strength.
+QA-01 to QA-10 are fixed with regression coverage; QA-11 remains open and documented. The
+reproduction, root cause, fix, test and verification for each are in
+`docs/final-debug-register.md` (historical detail in `docs/bug-fix-register.md`).
 
-## 22. Final submission recommendation
+## 7. Backend changes
 
-Ready to submit, with the limitations stated rather than hidden.
+- Consent lifecycle consequences: cancel future sessions, block re-booking, update participant contact
+  consent, write interview and participant audit events, preserve collected research.
+- `Outcome` model/enums/schemas/endpoints, migration `c8e3a1d5f204`, business-owner permissions,
+  server-derived status and audit events.
+- Participant detail: feedback history and per-interview insight counts derived from evidence links.
+- Project journey service and `/projects/{id}/journey` endpoint.
+- Corrected seed outcome windows; corrected timeline state derivation.
+- New tests: `test_outcomes.py`, `test_consent_withdrawal.py`, `test_journey_view.py`.
 
-**Implemented and tested:** feedback-derived evidence, three classifications,
-relationship metadata and author, immutability, provenance snapshot, grouped and
-reverse reads, unaudited-to-audited unlink, traceability export, decision chain,
-migration round-trip, legacy-volume upgrade, role enforcement, UI flows, axe and
-four-width responsive checks, Docker build and containerised browser tests.
+## 8. Frontend changes
 
-**Implemented but not tested:** nothing material. The only untested implementation
-detail is the migration on PostgreSQL (same Alembic operations, no instance).
+- Route-level lazy loading with Suspense; `/outcomes` route and navigation.
+- New Outcome measurement screen (plan, record result, filters, honest reasons).
+- Journey board and timeline on project detail, replacing the default "Questions" tab with the
+  learning journey.
+- Participant profile feedback history and derived insight counts.
+- New types for outcomes, journey and feedback history.
+- `frontend/src/styles/notion.css` implementing the approved tokens and component overrides; loaded
+  after the legacy sheets.
+- `SectionCard` exposes an accessible name so sections are real landmarks.
+- Extended Playwright helpers, screenshots, a11y and responsive lists; new `workflows.spec.ts`.
 
-**Partially implemented:** provenance-drift visibility (not built), source-type and
-verification filtering (client-side), pagination (not built).
+## 9. Consent and authorization status
 
-**Not implemented:** AI suggestions, SSO, email reset, retention enforcement,
-tombstoned evidence deletion, CI pipeline.
+**Consent:** implemented and verified. Grant, deny, withdraw and retention of history work. Withdrawal
+stops future contact and future bookings; it does not erase evidence collected before withdrawal. A
+production retention/deletion policy is still required.
 
-**Blocked by external access or credentials:** hosted deployment verification
-(no target platform), PostgreSQL migration execution (no instance), real recruiter
-feedback (none requested; the evaluator report is explicitly simulated).
+**Authorization:** workspace roles and project-level membership are both implemented and verified.
+`project_memberships` (viewer/editor/project_owner) gates *where*; the workspace role gates *what*.
+Lists, dashboard, analytics, search and exports are scoped. Admins are implicit owners of every
+project, which is a deliberate residual risk (not tenant isolation). See QA-10 and
+`authorization-and-permissions.md`.
+
+## 10. Customer profile improvements
+
+Real relationships now connect a participant to participation history, per-interview evidence and
+insight counts, feedback sources with depth and verification, and recruitment records. The history is
+project-labelled and does not copy records or leak another participant's feedback.
+
+## 11. Learning journey status
+
+Verified. Nine stages are derived from real records; cards link to those records. The timeline uses
+actual dates and computes past/upcoming/overdue. There is deliberately no drag-and-drop; status
+changes belong to the entity endpoint with its validation.
+
+## 12. Outcome measurement status
+
+Verified. The lifecycle is planned → measurement pending → measured (achieved / not achieved /
+inconclusive). Achieved is derived from actual, target and direction. An explicit measured status
+without a result is rejected; a result without a target is inconclusive. The loop is connected to a
+decision and optionally an action.
+
+## 13. Search and performance findings
+
+Search remains `lower(column) LIKE '%term%'`. A 50,000-row synthetic SQLite benchmark measured a
+17.91 ms median full scan versus 0.036 ms for an FTS5 trigram index lookup. At the demo's 10 rows the
+scan is negligible, and a B-tree cannot help a leading wildcard, so no index was added. The scalable
+path (FTS5 trigram or PostgreSQL `pg_trgm`, with triggers and a short-query fallback) is documented as
+next work. Bundle splitting reduced the entry from 1,011.67 kB to 261.65 kB with no feature loss.
+
+## 14. Screenshot gallery
+
+All images are under `docs/screenshots/` and were captured from the production build after real data
+loaded.
+
+| Area | Files |
+| --- | --- |
+| Entry | `01-demo-entry.png` |
+| Workspace | `02-overview.png`, `03-projects.png`, `17-global-search.png` |
+| Project | `04-project-detail.png`, `05-project-evidence.png`, `22-project-journey-board.png`, `23-project-journey-timeline.png` |
+| Customers | `06-participants.png`, `24-participant-profile.png` |
+| Research | `07-recruitment.png`, `08-interviews.png`, `09-interview-workspace.png`, `19-feedback-sources.png`, `25-consent-withdrawal.png` |
+| Evidence & insight | `20-evidence.png`, `10-insights-library.png`, `11-insight-traceability.png` |
+| Decisions & actions | `12-decision-register.png`, `13-decision-detail.png`, `14-actions.png`, `21-outcomes.png` |
+| Administration | `15-analytics.png`, `16-settings.png` |
+| Responsive | `18-mobile-overview.png` (375), `26-tablet-projects.png` (768), `27-mobile-outcomes.png` (375) |
+
+## 15. README updates
+
+README now documents the real workflow, implemented capabilities, current palette, screenshot
+gallery, verified commands, Docker results, limitations and roadmap. It no longer claims 108 tests,
+20 browser tests or an "Executive Emerald" implementation as the current design.
+
+## 16. Backend test results
+
+```
+122 passed, 1 warning in ~150 s
+```
+
+Warning: Starlette's `anyio.abc.BlockingPortal` deprecation in the test client. No failures, errors or
+skips. Includes the consent, outcome, journey, RBAC, migration, export and traceability suites.
+
+## 17. Frontend test results
+
+- `npm run typecheck`: exit 0.
+- `npm run build`: exit 0; no chunk-size advisory.
+- No frontend unit/component test runner is configured. This is a stated coverage gap; Playwright
+  covers rendered behaviour, not isolated component logic.
+
+## 18. Playwright test results
+
+**24 passed** against `http://localhost:8081` (Docker production build), including:
+
+- every primary screen, deep links, 404 and API error state;
+- keyboard skip link and command-palette search;
+- complete research-to-decision journey;
+- survey → evidence without an interview;
+- cross-project relationship refusal and unaudited attempts;
+- feedback create/verify/delete;
+- every CSV export;
+- journey board/timeline, profile feedback history, outcome lifecycle, consent withdrawal;
+- axe and four responsive widths.
+
+A first run failed only because Chromium was absent; after `npx playwright install chromium`, 20/20
+existing tests passed before the new tests were added.
+
+## 19. Accessibility results
+
+Axe: 0 serious/critical violations on 13 primary screens, the traceability screens, the add-evidence
+dialog and the command palette. Keyboard skip navigation and search were exercised. The palette's
+secondary text was darkened from `#787774` to `#6f6e6a` to meet 4.5:1 on the rail and white.
+
+**Not claimed:** full WCAG 2.2 AA conformance. A manual screen-reader review and reduced-motion manual
+check remain outstanding; automated tooling cannot establish conformance alone.
+
+## 20. Responsive results
+
+375, 768, 1024 and 1440 px passed for the primary screens; the page never scrolls horizontally and the
+rail switches to an off-canvas drawer below 992 px. Wide tables scroll inside their wrapper. The
+nine-column journey board scrolls inside its own container by design.
+
+## 21. Docker results
+
+`docker compose up --build -d` built both images, created the named volume and started both
+containers; both reported healthy. Verified:
+
+- API health 200 and web 200 with the expected page title;
+- seeded production startup log (7 users, 5 projects, 10 participants, 11 interviews, 2 outcomes);
+- authenticated write through the container API;
+- the written record was still present after `docker compose restart backend`;
+- no errors in the API logs.
+
+No pre-existing volume was deleted. Hosted deployment readiness is not claimed.
+
+## 22. Deployment status
+
+Local development and Docker Compose are verified. There is no hosted deployment, no CI run, no TLS
+termination and no external identity provider. The product is a portfolio prototype, not a production
+service.
+
+## 23. Git commits
+
+No commits were created in the first pass. The release pass records its changes in focused
+conventional commits (`fix(auth)`, `feat(ui)`, `test(qa)`, `docs(release)`) and does not bundle
+unrelated work.
+
+## 24. Remaining gaps
+
+| Gap | Severity | Status |
+| --- | --- | --- |
+| Project-level authorization / membership | P0 | **Implemented**; 16 adversarial tests |
+| Retention/deletion policy after withdrawal | P1 | Policy decision, not implemented |
+| Indexed search at scale | P2 | Measured, not implemented |
+| Frontend unit/component tests | P2 | Not configured |
+| UI path for `/projects/new` | P3 | Partially verified |
+| SSO, password reset, rate limiting | P2 | Not implemented |
+| Real outreach/audio/commerce integrations | — | Deliberately out of scope |
+| Hosted deployment | — | Not performed |
+
+## 25. Recruiter evaluation
+
+Independent simulated score: **86/100, Recommend selection with conditions**. Strong product judgment,
+workflow coherence, debugging and now a real project authorization boundary; unindexed search,
+partial membership auditing and the missing frontend unit layer are the remaining reservations. Full
+scorecard: `docs/final-recruiter-evaluation.md`.
+
+## 26. Submission recommendation
+
+Submit for evaluation as a portfolio prototype with the limitations above stated openly. Do not
+describe it as multi-tenant, enterprise-isolated, fully WCAG-conformant or production-deployed. Project
+membership is implemented; lead with the verified research workflow, the project boundary and the
+honest treatment of uncertainty.

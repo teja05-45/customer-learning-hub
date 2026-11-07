@@ -1,56 +1,51 @@
 # Design
 
-The product uses the **Executive Emerald** design system. The source of truth is
-`design-system/customer-learning-hub/MASTER.md`; the implementation is split between
-`frontend/src/styles/app.css` (base component rules) and `frontend/src/styles/emerald.css`
-(Executive Emerald tokens and refinements, imported after the base sheet). Pages consume tokens;
-they do not define their own palette.
+The product uses the approved **Notion-inspired workspace** palette. The source of truth is
+`frontend/src/styles/notion.css`, loaded after `app.css` and the legacy `emerald.css` layer. Pages
+consume tokens; they do not define their own palette. The Emerald layer is retained as history and
+is fully overridden — no dark green chrome or cream canvas remains on screen.
 
 ## Palette
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Primary | `#176B52` | Primary actions, links, verified state, active navigation |
-| Deep primary / chrome | `#124B3B` / `#103F32` | Sidebar, login aside, pressed primary |
-| Primary wash | `#EAF2ED` | Selected navigation, quiet emerald surfaces |
-| Canvas | `#F7F5EF` | Page background |
-| Surface | `#FFFFFF` | Cards, tables, dialogs |
-| Text | `#252923` | Primary text |
-| Secondary text | `#5F655C` | Descriptions, metadata (5.5:1 on canvas) |
-| Tertiary text | `#6A6F65` | Definitions, captions (5.1:1 on white) |
-| Border | `#E7E5DC` | Dividers and card edges |
-| Gold | `#D6A84F` / ink `#7A5210` | Current-location marker, provenance, attention |
-| Terracotta | `#D97757` / text `#B44A32` | Contradiction and destructive emphasis |
-| Success | `#1D7A57` | Completed, validated |
-| Warning | `#B57F2A` | Thin evidence, overdue, sample warnings |
-| Info | `#2F6B7A` | Observation and neutral information |
+| Background | `#FFFFFF` | Page and card surface |
+| Sidebar / muted surface | `#F7F7F5` | Chrome rail, table head, inset panels |
+| Primary text | `#252525` | Headings and body |
+| Secondary text | `#6F6E6A` | Descriptions and metadata |
+| Borders | `#E9E9E7` | Dividers and card edges |
+| Primary accent | `#347A69` | Primary actions, links, active icon |
+| AI accent | `#7565B5` | Researcher interpretation, AI-derived surfaces |
+| Hover | `#F1F1EF` | Navigation, rows and quiet controls |
+| Font | Inter | All UI and page titles |
 
-The supplied secondary tone `#74796F` measures ≈4.46:1 on white and is therefore not used for
-normal text; `#6A6F65` replaces it for text while the original remains available as a decorative
-tone. Gold is never used for small text on light surfaces — `#7A5210` is the text form. These
-contrast decisions are documented in the master design system and checked by axe in
+**Contrast deviation:** the approved secondary `#787774` measures 4.48:1 on white and about 4.2:1
+on `#F7F7F5`, just under WCAG AA 4.5:1 for the 11–13 px labels used here. The text token is
+`#6F6E6A`, a two-point darkening that measures ≈4.9:1 on white and ≈4.5:1 on the rail. The approved
+value remains documented as the intent; accessibility wins for text. Axe verifies the result in
 `frontend/e2e/a11y.spec.ts`.
 
 ## Typography and spacing
 
-- Page and brand titles use a serif display stack (`ui-serif`, Iowan Old Style, Palatino,
-  Georgia); the working UI uses the system sans stack. Serif never appears in tables, buttons,
-  labels or numbers.
-- Page title 30 px/600 with −0.018em tracking, collapsing to 24 px below 620 px. Card title
-  13.5 px/640, body 14 px, table body 13 px, definitions 11.5 px.
+- Inter (`'Inter', ui-sans-serif, -apple-system, ...`) for page titles, brand, body, tables and
+  buttons. No serif display face is used.
+- Page title 26 px/640 with −0.025em tracking; card title 13 px/620; body 13.5 px; table body 13 px;
+  definitions and metadata 11–12 px.
 - 4 px spacing scale; page padding 26/30 px desktop and 18/14 px below 992 px.
-- Radii: 5 px controls, 9 px cards, 12 px dialogs. Nothing above 12 px except status pills.
-- Elevation is limited to a 1 px resting shadow and a 30 px overlay shadow. No coloured shadows
-  and no gradients except the single login wash and the chart area fill.
+- Radii: 4 px controls, 6 px cards, 8–10 px dialogs. Pills are 3 px.
+- Elevation is nearly flat: 1 px card border, no resting shadow, one overlay shadow. No coloured
+  shadows and no gradients except the single login wash and the chart area fill.
 
 ## Layout
 
-- 260 px chrome rail, 64 px top bar, content capped at 1440 px.
+- 252 px light rail, 56 px top bar, content capped at 1440 px.
 - The rail collapses to an off-canvas drawer below 992 px; the top bar exposes the menu and
   search controls, and tables scroll inside `.table-wrap` rather than widening the page.
 - `grid-4` stat rows, `grid-3` metric cards, `grid-2` paired panels, `grid-sidebar` main +
   context column; all collapse to one column at their breakpoints.
-- Every screen opens with a serif title, one-sentence purpose and its actions.
+- Every screen opens with an Inter title, one-sentence purpose and its actions.
+- The nine-column journey board scrolls inside its own container; the page itself never scrolls
+  horizontally. There is no drag-and-drop because status changes must pass API validation.
 
 ## Motion
 

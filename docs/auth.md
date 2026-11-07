@@ -45,12 +45,22 @@ task in this release (see "Known gaps").
 Covering all routes by default means a newly added endpoint is protected unless it is explicitly
 listed as public — the safe failure mode.
 
+This middleware is only the first gate. It answers *what kind of write* a workspace role may perform.
+A second gate answers *which project* the write may touch: `app/services/access.py` resolves the
+user's project membership (`viewer`, `editor`, `project_owner`) and every project-scoped endpoint calls
+`assert_project_read`, `assert_project_write` or `assert_project_manage`. Effective permission is the
+intersection. Admins are implicit `project_owner` on every project. See
+[`authorization-and-permissions.md`](authorization-and-permissions.md).
+
 | Role | Write access |
 | --- | --- |
-| `researcher` | Projects, participants, recruitment, interviews, evidence, insights; decisions and actions |
-| `admin` | Everything above, plus settings, demo reset and user administration |
+| `researcher` | Projects, participants, recruitment, interviews, evidence, insights; demo reset; settings and user administration are **not** allowed |
+| `admin` | Everything above, plus settings and user administration |
 | `business_owner`, `ceo` | Decisions and actions (plus all reads) |
 | `cx` | No writes through this API; read access for coordination |
+
+Every write above is additionally limited to projects where the user holds `editor` or
+`project_owner` membership.
 
 Exports are reads: any active member may download records they can already see. The endpoint
 still re-checks the actor, and every download is written to the audit trail.
@@ -71,8 +81,9 @@ keeps the configuration simple, and `SameSite=Lax` blocks cross-site form submis
   `POST /users`), changes roles, deactivates leavers and resets passwords. There is no emailed
   invitation or self-service "forgot password" link, because no email provider is configured;
   the administrator hands the initial or reset password over directly.
-- **Single organisation.** `OrganizationSetting` is a singleton and every record belongs to it,
-  so cross-organisation isolation cannot be violated — but multi-tenancy is not implemented.
+- **Single organisation.** `OrganizationSetting` is a singleton and every record belongs to it.
+  Project membership separates teams inside that organisation; multi-tenancy is not implemented, and
+  workspace admins remain implicit owners of every project.
 - **CSRF defence is origin-based, not token-based.** `SameSite=Lax` plus a check that refuses
   unsafe requests whose browser-reported `Origin`/`Referer` is outside `CORS_ORIGINS` and the
   request's own host. Header-less clients are trusted, so a double-submit token remains the
